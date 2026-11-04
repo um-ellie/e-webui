@@ -1,6 +1,6 @@
-# API & Service Contracts: Secure Ollama Web UI
+# API & Service Contracts: Secure e-webui
 
-**Feature**: `001-ollama-web-ui`  
+**Feature**: `001-e-webui`  
 **Date**: 2026-11-04  
 **Status**: Completed  
 
@@ -90,20 +90,20 @@ The FastAPI service listens on `127.0.0.1:8080` inside the container, accessible
 
 ---
 
-## 2. Systemd Service Contract (`ollama-webui.service`)
+## 2. Systemd Service Contract (`e-webui.service`)
 
-- **File Path**: `/etc/systemd/system/ollama-webui.service`
+- **File Path**: `/etc/systemd/system/e-webui.service`
 - **Unit Configuration**:
   ```ini
   [Unit]
-  Description=Lightweight Ollama Web UI
+  Description=Lightweight e-webui
   After=network.target
 
   [Service]
   Type=simple
   User=root
-  WorkingDirectory=/opt/ollama-webui
-  ExecStart=/opt/ollama-webui/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
+  WorkingDirectory=/opt/e-webui
+  ExecStart=/opt/e-webui/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
   Restart=always
   RestartSec=3
   Environment="OLLAMA_HOST=http://127.0.0.1:11434"

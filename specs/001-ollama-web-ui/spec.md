@@ -1,6 +1,6 @@
-# Feature Specification: Secure Ollama Web UI Container
+# Feature Specification: Secure e-webui Container
 
-**Feature Branch**: `001-ollama-web-ui`
+**Feature Branch**: `001-e-webui`
 
 **Created**: 2026-11-04
 
@@ -20,7 +20,7 @@ As a user, I want to open a web browser to access a clean, dedicated web interfa
 
 **Acceptance Scenarios**:
 
-1. **Given** both the Web UI container and Ollama container are active, **When** the user sends a prompt through the web page, **Then** the prompt is forwarded to Ollama and the response is rendered in real-time or upon completion.
+1. **Given** both the e-webui container and Ollama container are active, **When** the user sends a prompt through the web page, **Then** the prompt is forwarded to Ollama and the response is rendered in real-time or upon completion.
 2. **Given** the Ollama container is unreachable or an invalid request is sent, **When** a prompt is submitted, **Then** an informative error message is displayed to the user instead of an application crash.
 
 ---
@@ -31,7 +31,7 @@ As a system administrator/user, I want the web interface service inside the Incu
 
 **Why this priority**: Ensures ease of use and consistent uptime whenever the container is started via `incus start`.
 
-**Independent Test**: Execute `incus start <container-name>`, wait for initialization, and immediately access the web UI URL from the host browser.
+**Independent Test**: Execute `incus start <container-name>`, wait for initialization, and immediately access the e-webui URL from the host browser.
 
 **Acceptance Scenarios**:
 
@@ -42,7 +42,7 @@ As a system administrator/user, I want the web interface service inside the Incu
 
 ### User Story 3 - Secure Access Control & Container Isolation (Priority: P3)
 
-As a security-conscious developer, I want access to the web UI and container communication to be restricted and isolated, so that unauthorized users or network snooping cannot access the model or the management interface.
+As a security-conscious developer, I want access to the e-webui and container communication to be restricted and isolated, so that unauthorized users or network snooping cannot access the model or the management interface.
 
 **Why this priority**: Fulfills the explicit requirement for high security while keeping the architecture simple.
 
@@ -50,14 +50,14 @@ As a security-conscious developer, I want access to the web UI and container com
 
 **Acceptance Scenarios**:
 
-1. **Given** an unauthenticated external or LAN client, **When** attempting to reach the web UI, **Then** connection is refused because the service is exposed solely on localhost loopback (`127.0.0.1`) on the host.
-2. **Given** the web UI container, **When** it queries Ollama, **Then** it communicates strictly through isolated internal container networking or a designated loopback proxy.
+1. **Given** an unauthenticated external or LAN client, **When** attempting to reach the e-webui, **Then** connection is refused because the service is exposed solely on localhost loopback (`127.0.0.1`) on the host.
+2. **Given** the e-webui container, **When** it queries Ollama, **Then** it communicates strictly through isolated internal container networking or a designated loopback proxy.
 
 ---
 
 ### Edge Cases
 
-- What happens if the Ollama container is stopped while the Web UI is open? (The UI must notify the user that Ollama is offline with a retry button).
+- What happens if the Ollama container is stopped while the e-webui is open? (The UI must notify the user that Ollama is offline with a retry button).
 - What happens if the response takes a long time or the connection drops mid-generation? (The connection should timeout gracefully without hanging the backend worker).
 - What happens if the user asks for a model name that is not pulled yet? (The UI should list available models from Ollama's `/api/tags` or display a clear missing-model warning).
 

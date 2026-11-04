@@ -1,6 +1,6 @@
-# Research & Architecture Decisions: Secure Ollama Web UI
+# Research & Architecture Decisions: Secure e-webui
 
-**Feature**: `001-ollama-web-ui`  
+**Feature**: `001-e-webui`  
 **Date**: 2026-11-04  
 **Status**: Completed  
 
@@ -63,12 +63,12 @@
 
 ## Decision 5: Service Lifecycle & Auto-Start Management
 
-- **Decision**: Standard Linux `systemd` service unit (`ollama-webui.service`).
+- **Decision**: Standard Linux `systemd` service unit (`e-webui.service`).
 - **Rationale**:
   - Debian Trixie (the container OS) uses `systemd` as PID 1 (`/sbin/init`).
-  - Creating a unit file `/etc/systemd/system/ollama-webui.service` and enabling it (`systemctl enable ollama-webui.service`) ensures that whenever the container boots (`incus start webui`), the service starts instantly.
+  - Creating a unit file `/etc/systemd/system/e-webui.service` and enabling it (`systemctl enable e-webui.service`) ensures that whenever the container boots (`incus start webui`), the service starts instantly.
   - Provides automatic restart on failure (`Restart=always`, `RestartSec=3`).
-  - Standardized logging via `journalctl -u ollama-webui -f`.
+  - Standardized logging via `journalctl -u e-webui -f`.
 - **Alternatives Considered**:
   - *Crontab `@reboot`*: Lacks process supervision, health checking, and structured logging.
   - *Manual shell script in `.bashrc`*: Requires opening an interactive shell session, violating the auto-start requirement.

@@ -12,7 +12,7 @@ Sync Impact Report:
 - Follow-up TODOs: None
 -->
 
-# Ellie Ollama WebUI Constitution
+# e-webui Constitution
 
 ## Core Principles
 

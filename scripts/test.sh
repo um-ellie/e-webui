@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Automated test runner for Ollama Web UI
+# Automated test runner for e-webui
 set -euo pipefail
 
 CONTAINER_NAME="${1:-webui}"
-APP_DIR="/opt/ollama-webui"
-PYTHON_BIN="/opt/open-webui/.local/share/uv/tools/open-webui/bin/python"
+APP_DIR="/opt/e-webui"
+PYTHON_BIN="/usr/bin/python3"
 
-echo "=== Running Ollama Web UI Test Suite inside Container (${CONTAINER_NAME}) ==="
+echo "=== Running e-webui Test Suite inside Container (${CONTAINER_NAME}) ==="
 
 incus exec "${CONTAINER_NAME}" -- env PYTHONPATH="${APP_DIR}" "${PYTHON_BIN}" -m pytest "${APP_DIR}/tests" -v --tb=short
 

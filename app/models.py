@@ -1,4 +1,4 @@
-"""Pydantic data models for the Ollama Web UI."""
+"""Pydantic data models for e-webui."""
 
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field

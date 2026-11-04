@@ -1,6 +1,6 @@
-# Tasks: Secure Ollama Web UI Container
+# Tasks: Secure e-webui Container
 
-**Input**: Design documents from `/specs/001-ollama-web-ui/`  
+**Input**: Design documents from `/specs/001-e-webui/`  
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/api-contract.md`, `quickstart.md`  
 
 ## Format: `- [ ] [TaskID] [P?] [Story?] Description with file path`
@@ -62,12 +62,12 @@
 
 **Goal**: Package and deploy the application as an auto-starting systemd service inside the `webui` Incus container so it runs automatically on container boot with zero manual commands.
 
-**Independent Test**: Execute `incus restart webui` and verify `incus exec webui -- systemctl is-active ollama-webui` reports `active`.
+**Independent Test**: Execute `incus restart webui` and verify `incus exec webui -- systemctl is-active e-webui` reports `active`.
 
 ### Implementation for User Story 2
 
-- [X] T014 [US2] Create systemd service unit file in `app/systemd/ollama-webui.service` configured for `/opt/ollama-webui`, virtualenv python, automatic restart, and loopback binding
-- [X] T015 [US2] Implement deployment script in `scripts/deploy.sh` to copy application files into the `webui` Incus container (`/opt/ollama-webui`), setup virtual environment, install requirements, and enable/start `ollama-webui.service`
+- [X] T014 [US2] Create systemd service unit file in `app/systemd/e-webui.service` configured for `/opt/e-webui`, virtualenv python, automatic restart, and loopback binding
+- [X] T015 [US2] Implement deployment script in `scripts/deploy.sh` to copy application files into the `webui` Incus container (`/opt/e-webui`), setup virtual environment, install requirements, and enable/start `e-webui.service`
 - [X] T016 [US2] Test container reboot cycle via `incus restart webui` and verify systemd service auto-start behavior
 
 **Checkpoint**: Service starts automatically on container boot and survives reboots
@@ -94,7 +94,7 @@
 **Purpose**: Automated test runner, validation against quickstart scenarios, and project documentation
 
 - [X] T019 [P] Create automated test runner script in `scripts/test.sh` executing `pytest` with coverage report
-- [X] T020 Run end-to-end validation scenarios according to `specs/001-ollama-web-ui/quickstart.md`
+- [X] T020 Run end-to-end validation scenarios according to `specs/001-e-webui/quickstart.md`
 - [X] T021 [P] Create documentation in `README.md` explaining container setup, Incus device configuration, and everyday usage commands
 
 ---

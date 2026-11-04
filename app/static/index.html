@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ollama Web UI</title>
+  <title>e-webui</title>
   <link rel="stylesheet" href="/static/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2226%22 font-size=%2226%22>🦙</text></svg>">
 </head>
@@ -12,8 +12,11 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="header-left">
-        <span class="logo-icon">🦙</span>
-        <h1 class="logo-title">Ollama UI</h1>
+        <span class="brand-logo" role="img" aria-label="e-webui" dir="ltr" style="unicode-bidi: isolate;">
+          <span class="logo-prompt">&gt;</span>
+          <span class="logo-text">~/.E</span>
+          <span class="logo-cursor animate-logo-cursor-blink" aria-hidden="true">_</span>
+        </span>
         <div id="status-badge" class="status-badge disconnected" title="Checking status...">
           <span class="status-dot"></span>
           <span id="status-text" class="status-text">Connecting</span>

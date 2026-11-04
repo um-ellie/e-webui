@@ -1,4 +1,4 @@
-"""Configuration settings for the Ollama Web UI application."""
+"""Configuration settings for the e-webui application."""
 
 import os
 

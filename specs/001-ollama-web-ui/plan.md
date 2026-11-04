@@ -1,12 +1,12 @@
-# Implementation Plan: Secure Ollama Web UI Container
+# Implementation Plan: Secure e-webui Container
 
-**Branch**: `001-ollama-web-ui` | **Date**: 2026-11-04 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-e-webui` | **Date**: 2026-11-04 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/001-ollama-web-ui/spec.md`
+**Input**: Feature specification from `/specs/001-e-webui/spec.md`
 
 ## Summary
 
-A lightweight, responsive, and secure Web UI for Ollama running inside a dedicated Incus container (`webui`). The application uses Python 3 with FastAPI and an asynchronous `httpx` client to stream model responses via Server-Sent Events (SSE) to an embedded, self-contained single-page chat interface. It replaces heavyweight alternatives with an ultra-efficient service consuming under 50 MB of RAM, starts automatically on container boot via a native `systemd` unit, communicates with the Ollama container via an isolated Incus proxy device (`ollama-link`), and restricts all incoming access strictly to host loopback (`127.0.0.1:8080`).
+A lightweight, responsive, and secure e-webui for Ollama running inside a dedicated Incus container (`webui`). The application uses Python 3 with FastAPI and an asynchronous `httpx` client to stream model responses via Server-Sent Events (SSE) to an embedded, self-contained single-page chat interface. It replaces heavyweight alternatives with an ultra-efficient service consuming under 50 MB of RAM, starts automatically on container boot via a native `systemd` unit, communicates with the Ollama container via an isolated Incus proxy device (`ollama-link`), and restricts all incoming access strictly to host loopback (`127.0.0.1:8080`).
 
 ---
 
@@ -41,7 +41,7 @@ A lightweight, responsive, and secure Web UI for Ollama running inside a dedicat
 ### Documentation (this feature)
 
 ```text
-specs/001-ollama-web-ui/
+specs/001-e-webui/
 ├── spec.md              # Feature specification & requirements
 ├── plan.md              # Implementation plan (this file)
 ├── research.md          # Architecture research & technology decisions
@@ -68,7 +68,7 @@ app/
 │   ├── style.css            # Dark/light clean styling (self-contained)
 │   └── app.js               # EventSource/fetch stream consumer & DOM renderer
 └── systemd/
-    └── ollama-webui.service # Systemd unit file for Incus container deployment
+    └── e-webui.service # Systemd unit file for Incus container deployment
 
 scripts/
 ├── deploy.sh                # Provisions dependencies & deploys service into Incus container

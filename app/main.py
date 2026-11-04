@@ -15,13 +15,13 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("ollama-webui")
+logger = logging.getLogger("e-webui")
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(
-    title="Secure Ollama Web UI",
+    title="e-webui",
     description="Lightweight and secure web interface for Ollama on Incus",
     version="1.0.0",
 )

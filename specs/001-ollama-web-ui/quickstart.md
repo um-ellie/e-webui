@@ -1,10 +1,10 @@
-# Quickstart & Validation Guide: Secure Ollama Web UI
+# Quickstart & Validation Guide: Secure e-webui
 
-**Feature**: `001-ollama-web-ui`  
+**Feature**: `001-e-webui`  
 **Date**: 2026-11-04  
 **Status**: Ready for Implementation  
 
-This guide specifies end-to-end verification steps to validate that the Web UI service, container networking, and auto-start mechanisms work correctly.
+This guide specifies end-to-end verification steps to validate that the e-webui service, container networking, and auto-start mechanisms work correctly.
 
 ---
 
@@ -37,7 +37,7 @@ Verify that the web application service starts automatically when the container 
 incus restart webui
 
 # Wait 3 seconds, then check service status
-incus exec webui -- systemctl status ollama-webui
+incus exec webui -- systemctl status e-webui
 ```
 **Expected Outcome**: `Active: active (running)` with PID managed by systemd, listening on `127.0.0.1:8080`.
 

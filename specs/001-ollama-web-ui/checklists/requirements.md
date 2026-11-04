@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Secure Ollama Web UI Container
+# Specification Quality Checklist: Secure e-webui Container
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-11-04

@@ -1,6 +1,6 @@
-# Data Model: Secure Ollama Web UI
+# Data Model: Secure e-webui
 
-**Feature**: `001-ollama-web-ui`  
+**Feature**: `001-e-webui`  
 **Date**: 2026-11-04  
 **Status**: Completed  
 

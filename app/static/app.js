@@ -1,5 +1,5 @@
 /**
- * Ollama Web UI - Client-side Streaming Chat
+ * e-webui - Client-side Streaming Chat
  * 100% Vanilla JS, zero dependencies, responsive streaming
  */
 
