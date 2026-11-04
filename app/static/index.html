@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ollama Web UI</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2226%22 font-size=%2226%22>🦙</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="logo-icon">🦙</span>
+        <h1 class="logo-title">Ollama UI</h1>
+        <div id="status-badge" class="status-badge disconnected" title="Checking status...">
+          <span class="status-dot"></span>
+          <span id="status-text" class="status-text">Connecting</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="model-select-wrapper">
+          <label for="model-select">Model:</label>
+          <select id="model-select" class="model-select" disabled>
+            <option value="">Loading models...</option>
+          </select>
+        </div>
+        <button id="clear-btn" class="btn btn-secondary" title="Clear conversation">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+          Clear
+        </button>
+      </div>
+    </header>
+
+    <!-- Chat Messages Container -->
+    <main id="chat-container" class="chat-container">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">💬</div>
+        <h2>How can I help you today?</h2>
+        <p>Type a prompt below to interact with your local Ollama models inside Incus.</p>
+        <div class="quick-prompts">
+          <button class="quick-prompt-btn" data-prompt="Why is the sky blue?">"Why is the sky blue?"</button>
+          <button class="quick-prompt-btn" data-prompt="Write a Python script to check system CPU and memory usage.">"Write a Python script for CPU/RAM"</button>
+          <button class="quick-prompt-btn" data-prompt="Explain the difference between a container and a virtual machine.">"Containers vs VMs"</button>
+        </div>
+      </div>
+      <div id="messages-list" class="messages-list"></div>
+    </main>
+
+    <!-- Input Footer -->
+    <footer class="app-footer">
+      <form id="chat-form" class="chat-form">
+        <div class="input-container">
+          <textarea
+            id="prompt-input"
+            class="prompt-input"
+            rows="1"
+            placeholder="Ask anything... (Shift+Enter for newline)"
+            required
+          ></textarea>
+          <button type="submit" id="send-btn" class="send-btn" title="Send message">
+            <svg id="send-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <svg id="stop-icon" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+            </svg>
+          </button>
+        </div>
+        <div class="footer-meta">
+          <span>Local & secure • Incus isolated • Zero telemetry</span>
+        </div>
+      </form>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+[Unit]
+Description=Lightweight Ollama Web UI
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ollama-webui
+ExecStart=/opt/open-webui/.local/share/uv/tools/open-webui/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
+Restart=always
+RestartSec=3
+Environment="OLLAMA_HOST=http://127.0.0.1:11434"
+Environment="APP_HOST=127.0.0.1"
+Environment="APP_PORT=8080"
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
