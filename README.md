@@ -30,7 +30,7 @@
 - **ایزولاسیون بین کانتینرها:** ارتباط با کانتینر مدل‌های Ollama از طریق پروکسی داخلی (`127.0.0.1:11434`) انجام شده و از اینترنت بیرونی بی‌نیاز است.
 - **استریم زنده و بلادرنگ (SSE):** نمایش کلمه به کلمه توکن‌ها به همراه پشتیبانی از بلوک‌های تفکر مدل (Thinking/Reasoning Blocks) مانند مدل‌های سری `qwen3.5`.
 - **بدون نیاز به CDN و اینترنت:** فرانت‌اند مستقل با جاوااسکریپت خام (Vanilla JS) و استایل تم تیره که ۱۰۰٪ آفلاین عمل می‌کند.
-- **اسکریپت استقرار هوشمند و تعاملی:** اسکریپت `scripts/deploy.sh` با قابلیت تایید مرحله‌به‌مرحله، ذخیره خودکار وضعیت و امکان ادامه از نقطه توقف.
+- **اسکریپت استقرار هوشمند و تعاملی:** اسکریپت `./deploy.sh` با قابلیت ساخت خودکار کانتینر دبیان ۱۳، ساخت محیط مجازی ایزوله پایتون (venv)، تایید مرحله‌به‌مرحله، کشف خودکار اولاما، ذخیره وضعیت و امکان ادامه از نقطه توقف.
 
 ---
 
@@ -65,40 +65,43 @@
    incus exec ollama -- ollama list
    ```
 
-#### گام ۲: ایجاد یا بررسی کانتینر مقصد (webui)
-اگر از قبل کانتینری به نام `webui` ندارید، یک کانتینر اوبونتو یا دبیان بسازید و آن را روشن کنید:
+#### گام ۲: اجرای اسکریپت استقرار خودکار و هوشمند (`./deploy.sh`)
+در ریشه پروژه، اسکریپت استقرار تعاملی را اجرا کنید (نیازی به ساخت دستی کانتینر نیست؛ اسکریپت در صورت نبودن، کانتینر دبیان ۱۳ را خودکار می‌سازد):
 ```bash
-# ایجاد کانتینر جدید بر پایه دبیان ۱۳  (در صورت عدم وجود)
-incus launch images:debian/13 webui
-
-# بررسی وضعیت روشن بودن کانتینر
-incus list
+./deploy.sh
 ```
 
-#### گام ۳: اجرای اسکریپت استقرار خودکار و هوشمند (`deploy.sh`)
-در ریشه پروژه، اسکریپت استقرار تعاملی را اجرا کنید:
-```bash
-./scripts/deploy.sh
-```
+> **توضیح عملکرد اسکریپت:**
+> اسکریپت نام کانتینر را از شما می‌پرسد (پیش‌فرض: `webui`) و مراحل زیر را به صورت تعاملی پیش می‌برد:
+> 0. **بررسی Incus و ساخت کانتینر:** بررسی نصب بودن Incus، ایجاد کانتینر Debian 13/stable در صورت نبودن، یا تشخیص کانتینر موجود و دریافت تایید برای ادامه.
+> 1. **تنظیم پروکسی‌ها و بررسی پورت:** بررسی آزاد بودن پورت ۸۰۸۰ در سیستم میزبان، تنظیم `webui-proxy` و کشف خودکار سرور Ollama و تنظیم `ollama-link`.
+> 2. **حل تداخل و پیش‌نیازها:** توقف سرویس‌های متداخل روی ۸۰۸۰ و نصب پکیج‌های سیستمی `python3-venv` و `curl`.
+> 3. **ایجاد محیط مجازی و انتقال فایل‌ها:** ساخت venv اختصاصی در `/opt/e-webui/venv`، انتقال فایل‌ها و نصب وابستگی‌ها بدون دستکاری پایتون اصلی سیستم.
+> 4. **ثبت سرویس Systemd:** ثبت، بارگذاری مجدد و فعال‌سازی سرویس `e-webui.service`.
+> 5. **بررسی سلامت و پروب HTTP:** تست پاسخ‌گویی واقعی وب‌سایت با HTTP 200 و بررسی ارتباط با اولاما.
 
-> **توضیح عملکرد این مرحله:**
-> اسکریپت نام کانتینر را از شما می‌پرسد (پیش‌فرض: `webui`) و سپس ۵ گام زیر را به صورت تعاملی و با تایید شما یا به صورت خودکار پیش می‌برد:
-> 1. **بررسی رانتایم و تنظیم پروکسی‌ها:** وضعیت کانتینر بررسی و در صورت خاموش بودن روشن می‌شود. سپس پروکسی‌های Incus یعنی `webui-proxy` (پورت 8080 میزبان به کانتینر) و `ollama-link` (پورت 11434 به کانتینر ollama) به طور خودکار اضافه می‌شوند.
-> 2. **حل تداخل و پیش‌نیازها:** در صورت فعال بودن سرویس سنگین open-webui روی پورت 8080، متوقف و غیرفعال می‌گردد و پیش‌نیازهای پایتون در صورت نبود نصب می‌شوند.
-> 3. **انتقال فایل‌ها و نصب وابستگی‌ها:** دایرکتوری‌های `app`، `tests` و `requirements.txt` به کانتینر کپی شده و پکیج‌ها نصب می‌شوند.
-> 4. **ثبت سرویس Systemd:** فایل سرویس `e-webui.service` ثبت، بازخوانی و فعال‌سازی خودکار در بوت کانتینر انجام می‌شود.
-> 5. **بررسی سلامت و نمایش آدرس:** سرویس اجرا و سلامت آن بررسی شده و آدرس نهایی به شما نمایش داده می‌شود.
-
-**حالت‌های دیگر اجرای اسکریپت:**
+**گزینه‌های کاربردی خط فرمان:**
 ```bash
 # استقرار مستقیم روی یک کانتینر خاص:
-./scripts/deploy.sh webui
+./deploy.sh webui
 
-# استقرار خودکار بدون پرسیدن تایید در هر مرحله (Non-interactive):
-./scripts/deploy.sh -y webui
+# تعیین پورت میزبان سفارشی (در صورت اشغال بودن ۸۰۸۰):
+./deploy.sh -p 8081 webui
 
-# ریست کردن حافظه استقرار و اجرای کامل مجدد از گام ۱:
-./scripts/deploy.sh -r webui
+# تعیین آدرس صریح اولاما:
+./deploy.sh -o 192.168.1.50:11434 webui
+
+# بررسی وضعیت سلامت و سرویس بدون ایجاد تغییر:
+./deploy.sh --status webui
+
+# پاک‌سازی و حذف سرویس و پروکسی‌های کانتینر:
+./deploy.sh --clean webui
+
+# استقرار خودکار بدون توقف برای تایید (Non-interactive):
+./deploy.sh -y webui
+
+# ریست کردن حافظه استقرار و اجرای کامل مجدد از ابتدا:
+./deploy.sh -r webui
 ```
 
 #### گام ۴: باز کردن و استفاده از رابط کاربری در مرورگر
@@ -209,40 +212,43 @@ Ensure your Linux host environment has the following prerequisites configured:
    incus exec ollama -- ollama list
    ```
 
-#### Step 2: Prepare Target Container (`webui`)
-If you do not already have an Incus container named `webui`, launch an Ubuntu or Debian container:
+#### Step 2: Run the Deployment Script (`./deploy.sh`)
+Execute the deployment script directly from the project root. The script automatically launches a new Debian 13/stable container if it does not already exist:
 ```bash
-# Launch a lightweight debian 13 container (if not present)
-incus launch images:debian/13 webui
-
-# Confirm the container is in the RUNNING state
-incus list
-```
-
-#### Step 3: Run the Interactive Deployment Script (`deploy.sh`)
-Execute the deployment script from the project root directory:
-```bash
-./scripts/deploy.sh
+./deploy.sh
 ```
 
 > **What happens during deployment:**
-> The script prompts for the target container name (defaults to `webui`) and performs 5 modular steps with interactive confirmation:
-> 1. **Container Runtime & Proxy Devices:** Verifies the container is running and automatically sets up Incus proxies `webui-proxy` (`127.0.0.1:8080`) and `ollama-link` (`127.0.0.1:11434`).
-> 2. **Environment & Port Conflict Resolution:** Detects and stops conflicting services (like legacy open-webui on port 8080) and checks Python 3 and pip.
-> 3. **File Synchronization & Dependencies:** Pushes `app/`, `tests/`, `requirements.txt`, and installs Python dependencies.
-> 4. **Systemd Configuration:** Registers `e-webui.service`, enables it to auto-start on boot, and reloads systemd.
-> 5. **Health Verification:** Verifies the active running state, tests Ollama connectivity, and outputs access URLs.
+> The script prompts for the target container name (defaults to `webui`) and executes the following modular steps:
+> 0. **Incus Check & Container Provisioning:** Checks `incus` installation and launches a Debian 13 / stable container if missing, or prompts to reuse an existing container.
+> 1. **Proxy Devices & Port Conflict Check:** Validates host port 8080, configures `webui-proxy`, auto-discovers the Ollama daemon, and sets up `ollama-link`.
+> 2. **Environment & Prerequisites:** Stops conflicting services and installs `python3-venv` and `curl`.
+> 3. **Python Virtual Environment & Code Sync:** Creates `/opt/e-webui/venv`, transfers application files, and installs dependencies strictly inside the virtualenv (PEP 668 compliant).
+> 4. **Systemd Configuration:** Registers and enables `e-webui.service`.
+> 5. **Live HTTP Health Verification:** Validates service status with an active HTTP 200 probe and confirms Ollama reachability.
 
-**Additional CLI Options:**
+**CLI Options & Commands:**
 ```bash
-# Deploy to a specific container name directly:
-./scripts/deploy.sh webui
+# Deploy to a specific container:
+./deploy.sh webui
+
+# Use custom host port:
+./deploy.sh -p 8081 webui
+
+# Specify custom Ollama URL:
+./deploy.sh -o 192.168.1.50:11434 webui
+
+# Inspect active status non-destructively:
+./deploy.sh --status webui
+
+# Teardown / Uninstall services and proxy devices:
+./deploy.sh --clean webui
 
 # Non-interactive mode (auto-accept all steps):
-./scripts/deploy.sh -y webui
+./deploy.sh -y webui
 
-# Force reset saved progress and re-run all steps from beginning:
-./scripts/deploy.sh -r webui
+# Force reset saved progress and re-run all steps:
+./deploy.sh -r webui
 ```
 
 #### Step 4: Access and Use the Web Chat
@@ -302,6 +308,7 @@ Automated test suites (unit and integration tests) verify mock proxies, API endp
 ### 📁 Project Structure
 
 ```text
+├── deploy.sh                  # Root executable wrapper delegating to scripts/deploy.sh
 ├── app/
 │   ├── config.py              # Environment variables & runtime constants
 │   ├── main.py                # FastAPI endpoints, CORS & static routing
