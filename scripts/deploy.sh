@@ -257,15 +257,15 @@ if is_step_completed "STEP_1_CONTAINER_VERIFIED" && \
 fi
 
 # ============================================================
-# STEP 1: Container Runtime Verification
+# STEP 1: Container Runtime Verification & Proxy Devices
 # ============================================================
 STEP_KEY="STEP_1_CONTAINER_VERIFIED"
 if is_step_completed "${STEP_KEY}"; then
-    info "[SKIPPED: Already Completed] Step 1: Container runtime verified."
+    info "[SKIPPED: Already Completed] Step 1: Container runtime and proxy devices verified."
 else
     confirm_step 1 5 "${STEP_KEY}" \
-        "Container Runtime Verification & Startup" \
-        "  - Check container status in Incus\n  - Start the container if it is currently stopped"
+        "Container Runtime & Incus Proxy Devices" \
+        "  - Check container status in Incus\n  - Start the container if it is currently stopped\n  - Ensure Incus proxy devices ('webui-proxy' on 8080 and 'ollama-link' on 11434) are configured"
 
     info "Inspecting container status for '${CONTAINER_NAME}'..."
     STATUS=$(incus_cmd info "${CONTAINER_NAME}" | awk '/^Status:/ {print $2}')
@@ -276,6 +276,40 @@ else
     else
         success "Container '${CONTAINER_NAME}' is active and running."
     fi
+
+    # 1. Configure webui-proxy (Host 127.0.0.1:8080 -> Container 8080)
+    info "Verifying 'webui-proxy' device on '${CONTAINER_NAME}'..."
+    if ! incus_cmd config device show "${CONTAINER_NAME}" 2>/dev/null | grep -q "webui-proxy"; then
+        info "Adding 'webui-proxy' proxy device (127.0.0.1:8080 -> container:8080)..."
+        incus_cmd config device add "${CONTAINER_NAME}" webui-proxy proxy listen=tcp:127.0.0.1:8080 connect=tcp:127.0.0.1:8080 || true
+        success "'webui-proxy' device added."
+    else
+        success "'webui-proxy' device already configured."
+    fi
+
+    # 2. Configure ollama-link (Container 127.0.0.1:11434 -> Ollama)
+    info "Verifying 'ollama-link' device on '${CONTAINER_NAME}'..."
+    if ! incus_cmd config device show "${CONTAINER_NAME}" 2>/dev/null | grep -q "ollama-link"; then
+        OLLAMA_TARGET="127.0.0.1:11434"
+        if incus_cmd info ollama &>/dev/null; then
+            OLLAMA_IP=$(incus_cmd list "^ollama$" --format csv -c 4 2>/dev/null | awk '{print $1}' | cut -d'(' -f1 || true)
+            if [ -n "${OLLAMA_IP}" ]; then
+                if curl -s --connect-timeout 1 "http://${OLLAMA_IP}:11434/api/tags" &>/dev/null; then
+                    OLLAMA_TARGET="${OLLAMA_IP}:11434"
+                elif curl -s --connect-timeout 1 "http://127.0.0.1:11434/api/tags" &>/dev/null; then
+                    OLLAMA_TARGET="127.0.0.1:11434"
+                else
+                    OLLAMA_TARGET="${OLLAMA_IP}:11434"
+                fi
+            fi
+        fi
+        info "Adding 'ollama-link' proxy device (connecting to ${OLLAMA_TARGET})..."
+        incus_cmd config device add "${CONTAINER_NAME}" ollama-link proxy bind=instance listen=tcp:127.0.0.1:11434 connect="tcp:${OLLAMA_TARGET}" || true
+        success "'ollama-link' device added."
+    else
+        success "'ollama-link' device already configured."
+    fi
+
     save_step_state "${STEP_KEY}"
     success "Step 1 complete."
 fi
@@ -392,14 +426,23 @@ else
         CONTAINER_IP="<container-ip>"
     fi
 
+    # Check Ollama reachability inside container
+    if run_in_container which curl &>/dev/null && run_in_container curl -s --connect-timeout 2 "http://127.0.0.1:11434/api/tags" &>/dev/null; then
+        success "Ollama connection verified inside container (http://127.0.0.1:11434 is responding)!"
+    else
+        warn "Ollama is not yet responding on http://127.0.0.1:11434 inside the container."
+        warn "Ensure the 'ollama' container is started ('incus start ollama')."
+    fi
+
     save_step_state "${STEP_KEY}"
     save_step_state "STATUS_COMPLETED"
 
     banner "Deployment Successfully Completed!"
-    echo "Application Access URL: http://${CONTAINER_IP}:8080"
-    echo "Container Name:        ${CONTAINER_NAME}"
-    echo "Service Status:        active (running)"
-    echo "Service Unit:          ${SYSTEMD_UNIT}"
+    echo "Application Access URL: http://127.0.0.1:8080 (via Incus Host Proxy)"
+    echo "Direct Container URL:   http://${CONTAINER_IP}:8080"
+    echo "Container Name:         ${CONTAINER_NAME}"
+    echo "Service Status:         active (running)"
+    echo "Service Unit:           ${SYSTEMD_UNIT}"
 fi
 
 exit 0

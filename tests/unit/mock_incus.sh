@@ -39,6 +39,33 @@ case "${subcommand}" in
         echo "Container ${container} started."
         exit 0
         ;;
+    config)
+        action="${1:-}"
+        shift || true
+        sub_action="${1:-}"
+        shift || true
+        container="${1:-}"
+        shift || true
+        device_file="${STATE_DIR}/devices_${container}.conf"
+        case "${sub_action}" in
+            show)
+                if [ -f "${device_file}" ]; then
+                    cat "${device_file}"
+                fi
+                exit 0
+                ;;
+            add)
+                dev_name="${1:-}"
+                echo "${dev_name}:" >> "${device_file}"
+                echo "  type: proxy" >> "${device_file}"
+                exit 0
+                ;;
+            *)
+                exit 0
+                ;;
+        esac
+        exit 0
+        ;;
     list)
         all_args="$*"
         if echo "${all_args}" | grep -q "csv"; then

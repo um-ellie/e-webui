@@ -7,11 +7,11 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/opt/e-webui
-ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8080
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8080
 Restart=always
 RestartSec=3
 Environment="OLLAMA_HOST=http://127.0.0.1:11434"
-Environment="APP_HOST=127.0.0.1"
+Environment="APP_HOST=0.0.0.0"
 Environment="APP_PORT=8080"
 NoNewPrivileges=true
 PrivateTmp=true

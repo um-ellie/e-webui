@@ -71,7 +71,14 @@ class TestDeployScript(unittest.TestCase):
         self.assertIn("Step 3 complete.", res.stdout)
         self.assertIn("Step 4 complete.", res.stdout)
         self.assertIn("Deployment Successfully Completed!", res.stdout)
-        self.assertIn("http://10.0.100.50:8080", res.stdout)
+        self.assertIn("http://127.0.0.1:8080", res.stdout)
+
+        # Verify proxy devices were configured
+        devices_file = Path(self.tmp_dir.name) / "devices_webui.conf"
+        self.assertTrue(devices_file.exists())
+        devices_content = devices_file.read_text()
+        self.assertIn("webui-proxy:", devices_content)
+        self.assertIn("ollama-link:", devices_content)
 
         # Verify state file was created
         state_file = Path(self.tmp_dir.name) / "opt" / "e-webui" / ".deploy_state"
