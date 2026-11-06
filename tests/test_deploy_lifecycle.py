@@ -416,6 +416,26 @@ class TestDeployLifecycle(unittest.TestCase):
         self.assertTrue((staging_dir / "checksums.sha256").exists(), "checksums.sha256 was not flattened to staging root")
         self.assertTrue((staging_dir / "manifest.json").exists(), "manifest.json was not flattened to staging root")
 
+    def test_install_service_unit_pushes_unit_file(self):
+        """Verify install_service_unit successfully creates parent dirs and pushes service unit."""
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        # Ensure /etc/systemd/system does NOT exist yet to test auto-creation
+        systemd_dir = c_root / "etc" / "systemd" / "system"
+        if systemd_dir.exists():
+            shutil.rmtree(systemd_dir)
+
+        common_lib = REPO_ROOT / "scripts" / "lib" / "common.sh"
+        incus_lib = REPO_ROOT / "scripts" / "lib" / "incus.sh"
+        service_lib = REPO_ROOT / "scripts" / "lib" / "service.sh"
+        cmd = f'source "{common_lib}" && source "{incus_lib}" && source "{service_lib}" && install_service_unit "e-webui-app" "/opt/e-webui" 8080 "http://127.0.0.1:11434"'
+
+        res = subprocess.run(["bash", "-c", cmd], env=self.env, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"Failed: {res.stderr}\nStdout: {res.stdout}")
+        unit_file = systemd_dir / "e-webui.service"
+        self.assertTrue(unit_file.exists(), "Systemd service unit was not created")
+        content = unit_file.read_text()
+        self.assertIn("ExecStart=/opt/e-webui/current/venv/bin/uvicorn", content)
+
     def test_deploy_rejects_missing_release(self):
         """Verify deploy halts with exit code 2 when no release package exists."""
         deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
