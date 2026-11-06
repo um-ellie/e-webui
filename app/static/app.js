@@ -147,58 +147,51 @@
     }
   }
 
-  // 4. Safe Lightweight Markdown Formatter
+  // 4. Safe Markdown Formatter & Clipboard Operations
   function escapeHtml(str) {
-    return str
+    return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
   function renderMarkdown(text) {
     if (!text) return "";
+    if (window.marked && typeof window.marked.parse === "function") {
+      return window.marked.parse(text);
+    }
+    return escapeHtml(text).replace(/\n/g, "<br>");
+  }
 
-    // Code blocks with syntax copy button
-    const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
-    let formatted = text.replace(codeBlockRegex, (match, lang, code) => {
-      const language = lang || "code";
-      const escapedCode = escapeHtml(code.trim());
-      return `
-        <div class="code-block-wrapper">
-          <div class="code-block-header">
-            <span>${language}</span>
-            <button class="copy-code-btn" type="button" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('code').innerText); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy</button>
-          </div>
-          <pre><code class="language-${language}">${escapedCode}</code></pre>
-        </div>
-      `;
-    });
-
-    // Inline code
-    formatted = formatted.replace(/`([^`]+)`/g, (match, code) => {
-      return `<code>${escapeHtml(code)}</code>`;
-    });
-
-    // Bold
-    formatted = formatted.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-
-    // Italic
-    formatted = formatted.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-
-    // Unordered lists
-    formatted = formatted.replace(/^\s*[-*]\s+(.+)$/gm, "<li>$1</li>");
-    formatted = formatted.replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>");
-    formatted = formatted.replace(/<\/ul>\s*<ul>/g, "");
-
-    // Line breaks outside code blocks
-    const parts = formatted.split(/(<div class="code-block-wrapper">[\s\S]*?<\/div>)/g);
-    for (let i = 0; i < parts.length; i++) {
-      if (!parts[i].startsWith('<div class="code-block-wrapper">')) {
-        parts[i] = parts[i].replace(/\n\n/g, "<p></p>").replace(/\n/g, "<br>");
+  async function copyToClipboard(text) {
+    if (!text) return false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn("Clipboard API failed, attempting fallback:", err);
       }
     }
-
-    return parts.join("");
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-999999px";
+    textarea.style.top = "-999999px";
+    textarea.setAttribute("aria-hidden", "true");
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return successful;
+    } catch (err) {
+      document.body.removeChild(textarea);
+      return false;
+    }
   }
 
   // 5. Message DOM Construction
@@ -207,6 +200,9 @@
 
     const msgItem = document.createElement("div");
     msgItem.className = `message-item ${role}`;
+    if (role === "assistant") {
+      msgItem.dataset.rawMarkdown = initialContent;
+    }
 
     const header = document.createElement("div");
     header.className = "message-header";
@@ -214,6 +210,7 @@
 
     const bubble = document.createElement("div");
     bubble.className = "message-bubble";
+    bubble.setAttribute("dir", "auto");
     bubble.innerHTML = renderMarkdown(initialContent);
 
     msgItem.appendChild(header);
@@ -245,6 +242,11 @@
   }
 
   function renderAssistantBubble(bubble, thinkingText, responseText, isStreaming = false) {
+    const msgItem = bubble.closest(".message-item");
+    if (msgItem) {
+      msgItem.dataset.rawMarkdown = responseText || "";
+    }
+
     let html = "";
     
     // Only display thinking process if Thinking Mode is enabled
@@ -271,6 +273,34 @@
     }
     
     bubble.innerHTML = html;
+
+    // Response Action Toolbar (ChatGPT / Gemini style)
+    if (msgItem) {
+      let actions = msgItem.querySelector(".message-actions");
+      if (!isStreaming && responseText) {
+        if (!actions) {
+          actions = document.createElement("div");
+          actions.className = "message-actions";
+          actions.innerHTML = `
+            <button class="action-btn copy-response-btn" type="button" title="Copy response" aria-label="Copy full response">
+              <svg class="action-icon copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <svg class="action-icon check-icon hidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span class="action-label">Copy</span>
+            </button>
+          `;
+          msgItem.appendChild(actions);
+        } else {
+          actions.style.display = "flex";
+        }
+      } else if (actions && isStreaming) {
+        actions.style.display = "none";
+      }
+    }
   }
 
   // 6. Streaming Prompt Submission
@@ -417,6 +447,61 @@
   // Toolbar toggles
   thinkingBtn.addEventListener("click", toggleThinking);
   themeBtn.addEventListener("click", toggleTheme);
+
+  // Message list click delegation (for full response copy & code block copy)
+  messagesList.addEventListener("click", async (e) => {
+    // 1. Full Response Copy Button (ChatGPT / Gemini style)
+    const copyResponseBtn = e.target.closest(".copy-response-btn");
+    if (copyResponseBtn) {
+      const msgItem = copyResponseBtn.closest(".message-item");
+      if (!msgItem) return;
+      const textToCopy = msgItem.dataset.rawMarkdown || "";
+      if (!textToCopy) return;
+
+      const success = await copyToClipboard(textToCopy);
+      if (success) {
+        copyResponseBtn.classList.add("copied");
+        const copyIcon = copyResponseBtn.querySelector(".copy-icon");
+        const checkIcon = copyResponseBtn.querySelector(".check-icon");
+        const label = copyResponseBtn.querySelector(".action-label");
+
+        if (copyIcon) copyIcon.classList.add("hidden");
+        if (checkIcon) checkIcon.classList.remove("hidden");
+        if (label) label.textContent = "Copied!";
+
+        setTimeout(() => {
+          copyResponseBtn.classList.remove("copied");
+          if (copyIcon) copyIcon.classList.remove("hidden");
+          if (checkIcon) checkIcon.classList.add("hidden");
+          if (label) label.textContent = "Copy";
+        }, 1800);
+      }
+      return;
+    }
+
+    // 2. Individual Code Block Copy Button
+    const copyCodeBtn = e.target.closest(".copy-code-btn");
+    if (copyCodeBtn) {
+      const wrapper = copyCodeBtn.closest(".code-block-wrapper");
+      if (!wrapper) return;
+      const codeEl = wrapper.querySelector("code");
+      if (!codeEl) return;
+      const codeText = codeEl.innerText || codeEl.textContent || "";
+
+      const success = await copyToClipboard(codeText);
+      if (success) {
+        copyCodeBtn.classList.add("copied");
+        const label = copyCodeBtn.querySelector(".copy-label") || copyCodeBtn;
+        const origText = label.textContent;
+        label.textContent = "Copied!";
+
+        setTimeout(() => {
+          copyCodeBtn.classList.remove("copied");
+          label.textContent = origText === "Copied!" ? "Copy" : origText;
+        }, 1500);
+      }
+    }
+  });
 
   // Clear conversation
   clearBtn.addEventListener("click", () => {
