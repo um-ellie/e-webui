@@ -1,6 +1,6 @@
 /**
- * e-webui - Client-side Streaming Chat
- * 100% Vanilla JS, zero dependencies, responsive streaming
+ * e-webui - Modern Developer Chat Interface
+ * Vanilla ES6+, Zero Dependencies, Streaming SSE Client
  */
 
 (() => {
@@ -8,6 +8,10 @@
   const statusBadge = document.getElementById("status-badge");
   const statusText = document.getElementById("status-text");
   const modelSelect = document.getElementById("model-select");
+  const thinkingBtn = document.getElementById("thinking-btn");
+  const themeBtn = document.getElementById("theme-btn");
+  const themeIconSun = document.getElementById("theme-icon-sun");
+  const themeIconMoon = document.getElementById("theme-icon-moon");
   const clearBtn = document.getElementById("clear-btn");
   const chatContainer = document.getElementById("chat-container");
   const emptyState = document.getElementById("empty-state");
@@ -18,10 +22,84 @@
   const sendIcon = document.getElementById("send-icon");
   const stopIcon = document.getElementById("stop-icon");
 
+  const SETTINGS_KEY = "ewebui_settings";
   let activeController = null;
   let isGenerating = false;
 
-  // 1. Health & Connection Check
+  // 1. Settings & Preferences Management
+  const settings = {
+    theme: "light",
+    thinking: true,
+  };
+
+  function loadSettings() {
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.theme === "dark" || parsed.theme === "light") {
+          settings.theme = parsed.theme;
+        }
+        if (typeof parsed.thinking === "boolean") {
+          settings.thinking = parsed.thinking;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load stored preferences:", e);
+    }
+    applyTheme(settings.theme);
+    applyThinkingState(settings.thinking);
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (e) {
+      console.warn("Could not save preferences to localStorage:", e);
+    }
+  }
+
+  // Theme Management
+  function applyTheme(theme) {
+    settings.theme = theme;
+    document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "dark") {
+      themeIconSun.classList.add("hidden");
+      themeIconMoon.classList.remove("hidden");
+      themeBtn.title = "Switch to Light Pastel mode";
+    } else {
+      themeIconSun.classList.remove("hidden");
+      themeIconMoon.classList.add("hidden");
+      themeBtn.title = "Switch to Dark Pastel mode";
+    }
+  }
+
+  function toggleTheme() {
+    const nextTheme = settings.theme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme);
+    saveSettings();
+  }
+
+  // Thinking Mode Management
+  function applyThinkingState(enabled) {
+    settings.thinking = enabled;
+    if (enabled) {
+      thinkingBtn.classList.add("active");
+      thinkingBtn.setAttribute("aria-pressed", "true");
+      thinkingBtn.title = "Thinking Mode: Active (Reasoning tokens visible)";
+    } else {
+      thinkingBtn.classList.remove("active");
+      thinkingBtn.setAttribute("aria-pressed", "false");
+      thinkingBtn.title = "Thinking Mode: Disabled (Reasoning tokens hidden/bypassed)";
+    }
+  }
+
+  function toggleThinking() {
+    applyThinkingState(!settings.thinking);
+    saveSettings();
+  }
+
+  // 2. Health & Connection Check
   async function checkHealth() {
     try {
       const res = await fetch("/api/health");
@@ -39,7 +117,7 @@
     }
   }
 
-  // 2. Fetch Models
+  // 3. Fetch Models
   async function loadModels() {
     try {
       const res = await fetch("/api/models");
@@ -61,6 +139,7 @@
         modelSelect.disabled = false;
       } else {
         modelSelect.innerHTML = '<option value="">No models found</option>';
+        modelSelect.disabled = true;
       }
     } catch (e) {
       modelSelect.innerHTML = '<option value="">Ollama unavailable</option>';
@@ -68,7 +147,7 @@
     }
   }
 
-  // 3. Simple Safe Markdown Formatter
+  // 4. Safe Lightweight Markdown Formatter
   function escapeHtml(str) {
     return str
       .replace(/&/g, "&amp;")
@@ -79,16 +158,16 @@
   function renderMarkdown(text) {
     if (!text) return "";
 
-    // Code blocks with language
+    // Code blocks with syntax copy button
     const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
     let formatted = text.replace(codeBlockRegex, (match, lang, code) => {
-      const language = lang || "plaintext";
+      const language = lang || "code";
       const escapedCode = escapeHtml(code.trim());
       return `
         <div class="code-block-wrapper">
           <div class="code-block-header">
             <span>${language}</span>
-            <button class="copy-code-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('code').innerText); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy</button>
+            <button class="copy-code-btn" type="button" onclick="navigator.clipboard.writeText(this.closest('.code-block-wrapper').querySelector('code').innerText); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500);">Copy</button>
           </div>
           <pre><code class="language-${language}">${escapedCode}</code></pre>
         </div>
@@ -122,7 +201,7 @@
     return parts.join("");
   }
 
-  // 4. Message Creation & DOM helpers
+  // 5. Message DOM Construction
   function appendMessage(role, initialContent = "") {
     if (emptyState) emptyState.style.display = "none";
 
@@ -131,7 +210,7 @@
 
     const header = document.createElement("div");
     header.className = "message-header";
-    header.textContent = role === "user" ? "You" : (modelSelect.value || "Ollama");
+    header.textContent = role === "user" ? "You" : (modelSelect.value || "Assistant");
 
     const bubble = document.createElement("div");
     bubble.className = "message-bubble";
@@ -155,37 +234,46 @@
       sendIcon.classList.add("hidden");
       stopIcon.classList.remove("hidden");
       sendBtn.title = "Stop generating";
+      sendBtn.setAttribute("aria-label", "Stop generating");
     } else {
       sendIcon.classList.remove("hidden");
       stopIcon.classList.add("hidden");
       sendBtn.title = "Send message";
+      sendBtn.setAttribute("aria-label", "Send message");
       activeController = null;
     }
   }
 
   function renderAssistantBubble(bubble, thinkingText, responseText, isStreaming = false) {
     let html = "";
-    if (thinkingText) {
+    
+    // Only display thinking process if Thinking Mode is enabled
+    if (settings.thinking && thinkingText) {
       const openAttr = isStreaming && !responseText ? "open" : "";
+      const statusLabel = isStreaming && !responseText ? "thinking..." : "thought process";
       html += `
         <details class="thinking-container" ${openAttr}>
           <summary class="thinking-header">
             <span>💭 Thinking Process</span>
+            <span class="thinking-status">${statusLabel}</span>
           </summary>
           <div class="thinking-body">${renderMarkdown(thinkingText)}</div>
         </details>
       `;
     }
+    
     if (responseText) {
       html += renderMarkdown(responseText);
     }
+    
     if (isStreaming) {
-      html += '<span class="streaming-cursor"></span>';
+      html += '<span class="streaming-cursor" aria-hidden="true"></span>';
     }
+    
     bubble.innerHTML = html;
   }
 
-  // 5. Streaming Prompt Submission
+  // 6. Streaming Prompt Submission
   async function handleSubmit(promptText) {
     if (!promptText || isGenerating) return;
 
@@ -218,6 +306,7 @@
           model: model,
           prompt: promptText,
           stream: true,
+          thinking: settings.thinking,
         }),
         signal: activeController.signal,
       });
@@ -253,7 +342,7 @@
               break;
             }
 
-            if (parsed.thinking) {
+            if (parsed.thinking && settings.thinking) {
               thinkingText += parsed.thinking;
               renderAssistantBubble(assistantBubble, thinkingText, fullText, true);
               scrollToBottom();
@@ -286,7 +375,7 @@
     }
   }
 
-  // 6. Event Listeners
+  // 7. Event Listeners
   chatForm.addEventListener("submit", (e) => {
     e.preventDefault();
     if (isGenerating && activeController) {
@@ -311,27 +400,36 @@
   // Auto-resize textarea
   promptInput.addEventListener("input", () => {
     promptInput.style.height = "auto";
-    promptInput.style.height = Math.min(promptInput.scrollHeight, 160) + "px";
+    promptInput.style.height = Math.min(promptInput.scrollHeight, 180) + "px";
   });
 
   // Quick prompt buttons
   document.querySelectorAll(".quick-prompt-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const prompt = btn.getAttribute("data-prompt");
-      promptInput.value = prompt;
-      handleSubmit(prompt);
+      if (prompt) {
+        promptInput.value = prompt;
+        handleSubmit(prompt);
+      }
     });
   });
+
+  // Toolbar toggles
+  thinkingBtn.addEventListener("click", toggleThinking);
+  themeBtn.addEventListener("click", toggleTheme);
 
   // Clear conversation
   clearBtn.addEventListener("click", () => {
     if (confirm("Clear current conversation?")) {
       messagesList.innerHTML = "";
       if (emptyState) emptyState.style.display = "flex";
+      promptInput.value = "";
+      promptInput.style.height = "auto";
     }
   });
 
-  // Initial load
+  // Initialization
+  loadSettings();
   checkHealth();
   loadModels();
   setInterval(checkHealth, 15000);

@@ -82,6 +82,9 @@ class OllamaClient:
                 "temperature": req.temperature,
             },
         }
+        if not req.thinking:
+            payload["think"] = False
+            payload["options"]["think"] = False
         if req.system:
             payload["system"] = req.system
 
@@ -107,6 +110,12 @@ class OllamaClient:
                             token = parsed.get("response", "")
                             thinking = parsed.get("thinking", None)
                             done = bool(parsed.get("done", False))
+
+                            if not req.thinking:
+                                thinking = None
+                                if not token and not done:
+                                    continue
+
                             chunk = StreamChunk(
                                 token=token,
                                 thinking=thinking,

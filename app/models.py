@@ -20,6 +20,9 @@ class PromptRequest(BaseModel):
     stream: bool = Field(
         default=True, description="Whether to stream response tokens"
     )
+    thinking: bool = Field(
+        default=True, description="Whether to include thinking tokens"
+    )
     temperature: float = Field(
         default=0.7,
         ge=0.0,

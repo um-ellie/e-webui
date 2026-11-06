@@ -1,4 +1,4 @@
-# e-webui 🦙
+# e-webui
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python)](https://www.python.org/)
@@ -9,13 +9,13 @@
 
 ---
 
-## 🌐 زبان‌ها / Languages
-- [فارسی (Persian)](#-فارسی-persian)
-- [English](#-english)
+## زبان‌ها / Languages
+- [فارسی (Persian)](#فارسی-persian)
+- [English](#english)
 
 ---
 
-# 🇮🇷 فارسی (Persian)
+# فارسی (Persian)
 
 رابط کاربری سبک، فوق‌العاده کم‌مصرف و ایزوله برای اجرای مدل‌های محلی [Ollama](https://ollama.com/) درون کانتینر اختصاصی [Incus](https://linuxcontainers.org/incus/). 
 
@@ -23,7 +23,7 @@
 
 ---
 
-### 🚀 ویژگی‌های کلیدی
+### ویژگی‌های کلیدی
 - **سبک و فوق‌العاده سریع:** مصرف رم کمتر از ۵۰ مگابایت (در مقایسه با بیش از ۱.۲ گیگابایت در رابط‌های وب سنگین).
 - **راه‌اندازی خودکار با Systemd:** ثبت به عنوان سرویس سیستمی `e-webui.service`؛ به محض روشن شدن کانتینر (`incus start webui`) سرویس در کسری از ثانیه آماده پاسخگویی است.
 - **امنیت سخت‌گیرانه و محلی:** مقید شده به `127.0.0.1:8080` در سیستم میزبان از طریق پروکسی Incus. هیچ پورتی روی شبکه محلی، وای‌فای یا اینترنت باز نمی‌شود.
@@ -34,7 +34,7 @@
 
 ---
 
-### 🛠️ معماری و سازوکار شبکه
+### معماری و سازوکار شبکه
 
 ```text
 مرورگر سیستم میزبان (Host Desktop)
@@ -53,7 +53,7 @@
 
 ---
 
-### 📖 راهنمای گام‌به‌گام نصب، راه‌اندازی و استفاده
+### راهنمای گام‌به‌گام نصب، راه‌اندازی و استفاده
 
 برای استفاده از `e-webui`، مراحل زیر را به ترتیب دنبال کنید. در هر مرحله توضیح داده شده است که چه کاری باید انجام دهید:
 
@@ -133,7 +133,7 @@ incus stop ollama
 
 ---
 
-### 🔧 مدیریت، عیب‌یابی و مانیتورینگ
+### مدیریت، عیب‌یابی و مانیتورینگ
 
 | عملیات | دستور در ترمینال |
 | :--- | :--- |
@@ -144,7 +144,7 @@ incus stop ollama
 
 ---
 
-### 🧪 اجرای تست‌های خودکار
+### اجرای تست‌های خودکار
 
 برای اطمینان از صحت عملکرد ماژول‌ها و یکپارچگی اندپوینت‌ها، تست‌های خودکار از طریق اسکریپت تعبیه شده در کانتینر اجرا می‌شوند:
 
@@ -162,7 +162,7 @@ incus stop ollama
 
 ---
 
-# 🇬🇧 English
+# English
 
 A lightweight, ultra-secure, and responsive web interface (`e-webui`) for [Ollama](https://ollama.com/) running inside a dedicated [Incus](https://linuxcontainers.org/incus/) container (`webui`).
 
@@ -170,7 +170,7 @@ Designed specifically to replace heavyweight multi-gigabyte UI suites (such as O
 
 ---
 
-### 🚀 Key Features
+### Key Features
 - **Blazing Fast & Ultra-Light:** Uses ~40 MB RAM at runtime (compared to >1.2 GB for typical full-stack alternatives).
 - **Zero-Friction Auto-Start:** Runs as a native `systemd` service (`e-webui.service`). Whenever you run `incus start webui`, the web chat is ready in under 1 second.
 - **Strict Host-Only Security:** Binds exclusively to `127.0.0.1:8080` via an Incus host proxy device. No open ports on your local Wi-Fi or LAN.
@@ -181,7 +181,7 @@ Designed specifically to replace heavyweight multi-gigabyte UI suites (such as O
 
 ---
 
-### 🛠️ Architecture & Networking
+### Architecture & Networking
 
 ```text
 Host Browser (Desktop)
@@ -200,7 +200,7 @@ Host Browser (Desktop)
 
 ---
 
-### 📖 Step-by-Step Getting Started & Usage Guide
+### Step-by-Step Getting Started & Usage Guide
 
 Follow these steps sequentially to deploy, access, and use `e-webui`:
 
@@ -280,7 +280,7 @@ Whenever you need it again, simply run `incus start webui` and refresh your brow
 
 ---
 
-### 🔧 Management & Troubleshooting
+### Management & Troubleshooting
 
 | Task | Command |
 | :--- | :--- |
@@ -291,7 +291,7 @@ Whenever you need it again, simply run `incus start webui` and refresh your brow
 
 ---
 
-### 🧪 Automated Testing
+### Automated Testing
 
 Automated test suites (unit and integration tests) verify mock proxies, API endpoints, and streaming generators:
 
@@ -305,7 +305,7 @@ Automated test suites (unit and integration tests) verify mock proxies, API endp
 
 ---
 
-### 📁 Project Structure
+### Project Structure
 
 ```text
 ├── deploy.sh                  # Root executable wrapper delegating to scripts/deploy.sh
@@ -333,7 +333,7 @@ Automated test suites (unit and integration tests) verify mock proxies, API endp
 
 ---
 
-### ⚙️ Environment Variables
+### Environment Variables
 
 The application can be configured via environment variables (defined in `app/config.py` and `app/systemd/e-webui.service`):
 
