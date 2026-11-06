@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EWebUIReleaseManifest",
+  "description": "Formal JSON Schema for e-webui Release Artifact Manifests",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "application",
+    "version",
+    "release_id",
+    "created_at",
+    "compatibility",
+    "artifacts"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "application": {
+      "type": "string",
+      "enum": ["e-webui"]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "release_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}-[0-9]{6}-[a-f0-9]{8}(-[a-z0-9]+)?$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "git": {
+      "type": "object",
+      "required": ["commit", "dirty"],
+      "additionalProperties": false,
+      "properties": {
+        "commit": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "required": ["min_deployment_manager_version", "python_version"],
+      "additionalProperties": false,
+      "properties": {
+        "min_deployment_manager_version": { "type": "string" },
+        "python_version": { "type": "string" },
+        "target_os": { "type": "string" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "sha256", "size_bytes", "purpose"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": "integer", "minimum": 0 },
+          "purpose": {
+            "type": "string",
+            "enum": ["app_source", "dependencies", "service_unit", "verification"]
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "builder": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

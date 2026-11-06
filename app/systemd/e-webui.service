@@ -1,18 +1,27 @@
 [Unit]
-Description=e-webui
+Description=e-webui Application Service
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/e-webui
-ExecStart=/opt/e-webui/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080
+WorkingDirectory=/opt/e-webui/current
+ExecStart=/opt/e-webui/current/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080
 Restart=always
 RestartSec=3
-Environment="OLLAMA_HOST=http://127.0.0.1:11434"
+
+# Persistent and Deployment Environment Configuration
+EnvironmentFile=-/opt/e-webui/deployment.env
+EnvironmentFile=-/opt/e-webui/shared/.env
+
+# Default Fallback Environment
+Environment="PYTHONPATH=/opt/e-webui/current"
 Environment="APP_HOST=0.0.0.0"
 Environment="APP_PORT=8080"
+Environment="OLLAMA_HOST=http://127.0.0.1:11434"
+
+# Security Hardening
 NoNewPrivileges=true
 PrivateTmp=true
 

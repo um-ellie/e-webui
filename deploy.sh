@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Root wrapper for e-webui deployment
-# Conforms to spec: specs/004-enhance-deployment-script/spec.md
+# Conforms to spec: specs/008-deployment-lifecycle-manager/spec.md
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

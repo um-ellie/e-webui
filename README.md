@@ -80,28 +80,46 @@
 > 4. **ثبت سرویس Systemd:** ثبت، بارگذاری مجدد و فعال‌سازی سرویس `e-webui.service`.
 > 5. **بررسی سلامت و پروب HTTP:** تست پاسخ‌گویی واقعی وب‌سایت با HTTP 200 و بررسی ارتباط با اولاما.
 
-**گزینه‌های کاربردی خط فرمان:**
+**گزینه‌های کاربردی خط فرمان (مدیریت چرخه عمر استقرار و پکیج‌های انتشار):**
 ```bash
-# استقرار مستقیم روی یک کانتینر خاص:
-./deploy.sh webui
+# ساخت پکیج رسمی انتشار (تولید manifest.json و checksums.sha256 و فایل‌های payload):
+./build-release.sh
+
+# ساخت پکیج با تعیین نسخه دلخواه یا خروجی اختصاصی:
+./build-release.sh --version 1.0.1 --output-dir dist/releases
+
+# استقرار خودکار با مصرف جدیدترین پکیج ساخته‌شده در dist/releases:
+./deploy.sh e-webui-app
+
+# استقرار یا به‌روزرسانی با مشخص کردن مسیر مستقیم پکیج (پوشه یا فایل .tar.gz):
+./deploy.sh --update --release dist/releases/e-webui-1.0.0-20261106-120000-a1b2c3d4.tar.gz e-webui-app
+
+# به‌روزرسانی سریع بدون بازسازی کانتینر و بدون نصب مجدد پکیج‌های سیستم:
+./deploy.sh --update e-webui-app
+
+# بازگشت خودکار/دستی به نسخه سالم قبلی (Rollback):
+./deploy.sh --rollback e-webui-app
+
+# مشاهده وضعیت کامل استقرار، نسخه فعال، هش وابستگی‌ها و سلامت HTTP:
+./deploy.sh --status e-webui-app
+
+# عیب‌یابی خودکار، بازسازی پیوندها و اصلاح سرویس:
+./deploy.sh --repair e-webui-app
+
+# پاک‌سازی و حذف سرویس (با حفظ داده‌های پایدار shared/ به صورت پیش‌فرض):
+./deploy.sh --uninstall e-webui-app
+
+# حذف کامل به همراه پاک‌سازی داده‌های پایدار:
+./deploy.sh --uninstall --purge-data e-webui-app
 
 # تعیین پورت میزبان سفارشی (در صورت اشغال بودن ۸۰۸۰):
-./deploy.sh -p 8081 webui
+./deploy.sh -p 8081 e-webui-app
 
 # تعیین آدرس صریح اولاما:
-./deploy.sh -o 192.168.1.50:11434 webui
-
-# بررسی وضعیت سلامت و سرویس بدون ایجاد تغییر:
-./deploy.sh --status webui
-
-# پاک‌سازی و حذف سرویس و پروکسی‌های کانتینر:
-./deploy.sh --clean webui
+./deploy.sh -o 192.168.1.50:11434 e-webui-app
 
 # استقرار خودکار بدون توقف برای تایید (Non-interactive):
-./deploy.sh -y webui
-
-# ریست کردن حافظه استقرار و اجرای کامل مجدد از ابتدا:
-./deploy.sh -r webui
+./deploy.sh -y e-webui-app
 ```
 
 #### گام ۴: باز کردن و استفاده از رابط کاربری در مرورگر
@@ -227,28 +245,46 @@ Execute the deployment script directly from the project root. The script automat
 > 4. **Systemd Configuration:** Registers and enables `e-webui.service`.
 > 5. **Live HTTP Health Verification:** Validates service status with an active HTTP 200 probe and confirms Ollama reachability.
 
-**CLI Options & Commands:**
+**CLI Options & Commands (Release Packaging & Deployment Lifecycle):**
 ```bash
-# Deploy to a specific container:
-./deploy.sh webui
+# Build an immutable release artifact package (generates manifest.json, checksums.sha256, and payload):
+./build-release.sh
 
-# Use custom host port:
-./deploy.sh -p 8081 webui
+# Build a release package with custom version or strict git cleanliness check:
+./build-release.sh --version 1.0.1 --strict
+
+# Auto-detect mode (consumes newest release in dist/releases/):
+./deploy.sh e-webui-app
+
+# Deploy or update by explicitly pointing to a release package directory or .tar.gz bundle:
+./deploy.sh --update --release dist/releases/e-webui-1.0.0-20261106-120000-a1b2c3d4.tar.gz e-webui-app
+
+# Fast routine update without container recreation or OS package reinstall:
+./deploy.sh --update e-webui-app
+
+# Restore previous healthy release (Rollback):
+./deploy.sh --rollback e-webui-app
+
+# Inspect deployment state, active release ID, venv hash, and HTTP health:
+./deploy.sh --status e-webui-app
+
+# Self-heal broken symlinks, service units, and configuration:
+./deploy.sh --repair e-webui-app
+
+# Clean teardown (preserves shared/ persistent data by default):
+./deploy.sh --uninstall e-webui-app
+
+# Full teardown including deletion of persistent data:
+./deploy.sh --uninstall --purge-data e-webui-app
+
+# Specify custom host port:
+./deploy.sh -p 8081 e-webui-app
 
 # Specify custom Ollama URL:
-./deploy.sh -o 192.168.1.50:11434 webui
-
-# Inspect active status non-destructively:
-./deploy.sh --status webui
-
-# Teardown / Uninstall services and proxy devices:
-./deploy.sh --clean webui
+./deploy.sh -o 192.168.1.50:11434 e-webui-app
 
 # Non-interactive mode (auto-accept all steps):
-./deploy.sh -y webui
-
-# Force reset saved progress and re-run all steps:
-./deploy.sh -r webui
+./deploy.sh -y e-webui-app
 ```
 
 #### Step 4: Access and Use the Web Chat
