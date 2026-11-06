@@ -159,14 +159,28 @@ The interface will be instantly available in your browser at `http://127.0.0.1:8
 
 ### Automated Testing
 
-To run the automated test suite within the container environment:
+For local development and running unit tests without container infrastructure (using mock harnesses conforming to Constitution Principle I):
 
 ```bash
-# Run pytest inside the default container (webui)
+# Create and activate Python virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install development and testing dependencies
+pip install -r requirements-dev.txt
+
+# Run unit and integration tests locally
+python3 -m unittest discover tests
+```
+
+To run the automated test suite within the Incus container:
+
+```bash
+# Run tests inside the default container (e-webui-app)
 ./scripts/test.sh
 
 # Or specify a custom container name
-./scripts/test.sh webui
+./scripts/test.sh e-webui-app
 ```
 
 ---
@@ -176,6 +190,8 @@ To run the automated test suite within the container environment:
 ```text
 ├── deploy.sh                  # Root executable wrapper for deployment
 ├── build-release.sh           # Root executable wrapper for release packaging
+├── requirements.txt           # Production runtime dependencies
+├── requirements-dev.txt       # Development and test dependencies
 ├── app/
 │   ├── config.py              # Environment variables and application configuration
 │   ├── main.py                # FastAPI server, endpoints, and static routing
@@ -380,6 +396,40 @@ python3 -m unittest discover tests
 
 # یا با تعیین نام کانتینر سفارشی
 ./scripts/test.sh e-webui-app
+```
+
+---
+
+### ساختار پروژه
+
+```text
+├── deploy.sh                  # اسکریپت ریشه برای استقرار و ارتقا
+├── build-release.sh           # اسکریپت ریشه برای ساخت پکیج رسمی انتشار
+├── requirements.txt           # وابستگی‌های زمان اجرای پروداکشن
+├── requirements-dev.txt       # وابستگی‌های محیط توسعه و آزمون
+├── app/
+│   ├── config.py              # متغیرهای محیطی و پیکربندی برنامه
+│   ├── main.py                # سرور FastAPI، روت‌ها و فایل‌های استاتیک
+│   ├── models.py              # مدل‌های داده و اسکیمای SSE
+│   ├── services/
+│   │   └── ollama_client.py   # کلاینت آسنکرون و استریم ارتباط با اولاما
+│   ├── static/
+│   │   ├── index.html         # رابط کاربری تک‌صفحه‌ای چت
+│   │   ├── style.css          # استایل‌شیت واکنش‌گرا با پشتیبانی تم روشن/تاریک
+│   │   ├── app.js             # مدیریت رویدادهای SSE و رندر پیام‌ها
+│   │   └── vendor/
+│   │       └── marked.min.js  # کتابخانه سبک رندر امن Markdown
+│   └── systemd/
+│       └── e-webui.service    # فایل تعریف سرویس systemd
+├── scripts/
+│   ├── deploy.sh              # اسکریپت جامع مدیریت چرخه حیات و نصب
+│   ├── build-release.sh       # ابزار بسته‌بندی پکیج انتشار با اعتبارسنجی هش
+│   └── test.sh                # رانر خودکار اجرای تست‌ها
+├── tests/
+│   ├── conftest.py            # فیکسچرهای تست pytest
+│   ├── unit/                  # تست‌های واحد استقرار، بسته‌بندی، مدل‌ها و امنیت
+│   └── integration/           # تست‌های یکپارچگی اندپوینت‌های FastAPI
+└── specs/                     # مستندات و مشخصات فنی Spec-Kit
 ```
 
 ---
