@@ -358,14 +358,28 @@ incus start webui
 
 ### اجرای تست‌های خودکار
 
-برای اجرای تست‌های خودکار در محیط کانتینر:
+برای توسعه محلی و اجرای آزمون‌های واحد بدون نیاز به کانتینر (مطابق با اصل جداسازی زیرساخت و استفاده از Mockها):
 
 ```bash
-# اجرای pytest درون کانتینر پیش‌فرض (webui)
+# ایجاد و فعال‌سازی محیط مجازی پایتون
+python3 -m venv .venv
+source .venv/bin/activate
+
+# نصب وابستگی‌های توسعه و آزمون
+pip install -r requirements-dev.txt
+
+# اجرای آزمون‌های واحد و یکپارچگی به صورت محلی
+python3 -m unittest discover tests
+```
+
+برای اجرای تست‌های خودکار درون محیط کانتینر Incus:
+
+```bash
+# اجرای تست‌ها درون کانتینر پیش‌فرض (e-webui-app)
 ./scripts/test.sh
 
 # یا با تعیین نام کانتینر سفارشی
-./scripts/test.sh webui
+./scripts/test.sh e-webui-app
 ```
 
 ---

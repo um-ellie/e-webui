@@ -64,3 +64,17 @@ async def test_generate_endpoint_streaming():
             text = res.text
             assert 'data: {"token":"Hello"' in text
             assert 'data: {"token":"!"' in text
+
+
+@pytest.mark.asyncio
+async def test_security_headers_present():
+    """Verifies standard defensive security headers are returned on HTTP responses."""
+    with patch("app.main.ollama_client.check_health", new_callable=AsyncMock) as mock_health:
+        mock_health.return_value = True
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res = await ac.get("/api/health")
+            assert res.headers.get("x-content-type-options") == "nosniff"
+            assert res.headers.get("x-frame-options") == "DENY"
+            assert res.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+            assert "content-security-policy" in res.headers

@@ -1,6 +1,7 @@
 """FastAPI application entrypoint and route handlers."""
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,26 +21,62 @@ logger = logging.getLogger("e-webui")
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+ollama_client = OllamaClient(base_url=OLLAMA_HOST)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manages application lifecycle including persistent client connection pools."""
+    await ollama_client.start()
+    try:
+        yield
+    finally:
+        await ollama_client.close()
+
+
 app = FastAPI(
     title="e-webui",
     description="Lightweight and secure web interface for Ollama on Incus",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
-# CORS middleware (restricted to localhost)
+# CORS middleware (dynamically bound to configured host port)
+cors_origins = [
+    f"http://127.0.0.1:{APP_PORT}",
+    f"http://localhost:{APP_PORT}",
+]
+if APP_PORT != 8080:
+    cors_origins.extend(["http://127.0.0.1:8080", "http://localhost:8080"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Injects standard defensive HTTP security headers into all responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
+    return response
+
 # Mount static directory
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-ollama_client = OllamaClient(base_url=OLLAMA_HOST)
 
 
 @app.get("/", response_class=FileResponse)

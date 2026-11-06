@@ -31,19 +31,20 @@ async def test_get_models_success(mock_tags):
 
 @pytest.mark.asyncio
 async def test_check_health(mock_tags):
-    """Verifies health check returns true on HTTP 200."""
+    """Verifies health check returns true on HTTP 200 from fast root ping."""
     client = OllamaClient(base_url="http://test-ollama:11434")
 
     mock_response = httpx.Response(
         status_code=200,
-        json=mock_tags,
-        request=httpx.Request("GET", "http://test-ollama:11434/api/tags"),
+        text="Ollama is running",
+        request=httpx.Request("GET", "http://test-ollama:11434/"),
     )
 
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
         mock_get.return_value = mock_response
         connected = await client.check_health()
         assert connected is True
+        mock_get.assert_called_once_with("http://test-ollama:11434/")
 
 
 @pytest.mark.asyncio
@@ -68,11 +69,12 @@ async def test_stream_generate(mock_generate_chunks):
             pass
 
     mock_client = MagicMock()
+    mock_client.is_closed = False
     mock_client.stream.return_value = MockStreamContext()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch.object(client, "get_http_client", return_value=mock_client):
         collected_events = []
         async for sse_event in client.stream_generate(req):
             collected_events.append(sse_event)

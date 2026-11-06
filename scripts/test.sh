@@ -2,7 +2,7 @@
 # Automated test runner for e-webui
 set -euo pipefail
 
-CONTAINER_NAME="${1:-webui}"
+CONTAINER_NAME="${1:-e-webui-app}"
 APP_DIR="/opt/e-webui"
 PYTHON_BIN="/usr/bin/python3"
 

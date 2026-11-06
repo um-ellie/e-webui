@@ -7,7 +7,13 @@ from pydantic import BaseModel, Field
 class PromptRequest(BaseModel):
     """Incoming request payload for model inference."""
 
-    model: str = Field(..., description="Target Ollama model name, e.g. qwen3.5:4b")
+    model: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_\-\./:]+$",
+        description="Target Ollama model name, e.g. qwen3.5:4b",
+    )
     prompt: str = Field(
         ...,
         min_length=1,

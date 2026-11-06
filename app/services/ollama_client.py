@@ -12,18 +12,45 @@ logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
-    """Handles communication with the local Ollama instance."""
+    """Handles communication with the local Ollama instance with connection pooling."""
 
-    def __init__(self, base_url: str = OLLAMA_HOST, timeout: float = 120.0):
+    def __init__(
+        self,
+        base_url: str = OLLAMA_HOST,
+        timeout: float = 120.0,
+        http_client: Optional[httpx.AsyncClient] = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self._client: Optional[httpx.AsyncClient] = http_client
+
+    def get_http_client(self) -> httpx.AsyncClient:
+        """Returns the active shared HTTP client, creating one if not present."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
+
+    async def start(self):
+        """Initializes persistent shared HTTP connection pool."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+
+    async def close(self):
+        """Closes the shared HTTP connection pool."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     async def check_health(self) -> bool:
-        """Checks if Ollama service is reachable and responding."""
+        """Checks if Ollama service is reachable and responding using fast root liveness ping."""
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await client.get(f"{self.base_url}/api/tags")
-                return res.status_code == 200
+            client = self.get_http_client()
+            res = await client.get(f"{self.base_url}/")
+            if res.status_code == 200:
+                return True
+            # Fallback to /api/tags if an upstream proxy restricts to /api
+            res = await client.get(f"{self.base_url}/api/tags")
+            return res.status_code == 200
         except Exception as exc:
             logger.warning(f"Ollama health check failed: {exc}")
             return False
@@ -31,10 +58,10 @@ class OllamaClient:
     async def get_models(self) -> ModelListResponse:
         """Retrieves and normalizes available models from Ollama."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                res = await client.get(f"{self.base_url}/api/tags")
-                res.raise_for_status()
-                data = res.json()
+            client = self.get_http_client()
+            res = await client.get(f"{self.base_url}/api/tags")
+            res.raise_for_status()
+            data = res.json()
         except Exception as exc:
             logger.error(f"Error fetching Ollama models: {exc}")
             raise
@@ -91,8 +118,8 @@ class OllamaClient:
         url = f"{self.base_url}/api/generate"
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                async with client.stream("POST", url, json=payload) as response:
+            client = self.get_http_client()
+            async with client.stream("POST", url, json=payload) as response:
                     if response.status_code != 200:
                         err_text = await response.aread()
                         err_msg = f"Ollama returned HTTP {response.status_code}: {err_text.decode('utf-8', errors='ignore')}"
