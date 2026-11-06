@@ -10,6 +10,7 @@ __pycache__/
 .Python
 *.pyo
 *.pyd
+.cache/
 
 # --- Virtual Environments ---
 .venv/
@@ -37,6 +38,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*.tar.gz
+*.tar
+*.tgz
+*.zip
 
 # --- Testing & Code Quality ---
 .pytest_cache/
@@ -56,6 +61,8 @@ coverage.xml
 .deploy_state
 *.pid
 *.seed
+checksums.sha256
+manifest.json
 
 # --- Environment Configurations & Secrets ---
 .env

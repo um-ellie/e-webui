@@ -9,174 +9,9 @@
 
 ---
 
-## زبان‌ها / Languages
-- [فارسی (Persian)](#فارسی-persian)
+## Languages / زبان‌ها
 - [English](#english)
-
----
-
-# فارسی (Persian)
-
-رابط کاربری سبک، فوق‌العاده کم‌مصرف و ایزوله برای اجرای مدل‌های محلی [Ollama](https://ollama.com/) درون کانتینر اختصاصی [Incus](https://linuxcontainers.org/incus/). 
-
-این پروژه با هدف جایگزینی رابط‌های سنگین و چند گیگابایتی (مانند Open-WebUI) طراحی شده است. `e-webui` در حالت اجرا تنها حدود **۴۰ مگابایت رم** مصرف می‌کند، کاملاً به صورت آفلاین و بدون وابستگی به CDN کار می‌کند و ترافیک شبکه را منحصراً به آدرس محلی سیستم میزبان محدود می‌نماید.
-
----
-
-### ویژگی‌های کلیدی
-- **سبک و فوق‌العاده سریع:** مصرف رم کمتر از ۵۰ مگابایت (در مقایسه با بیش از ۱.۲ گیگابایت در رابط‌های وب سنگین).
-- **راه‌اندازی خودکار با Systemd:** ثبت به عنوان سرویس سیستمی `e-webui.service`؛ به محض روشن شدن کانتینر (`incus start webui`) سرویس در کسری از ثانیه آماده پاسخگویی است.
-- **امنیت سخت‌گیرانه و محلی:** مقید شده به `127.0.0.1:8080` در سیستم میزبان از طریق پروکسی Incus. هیچ پورتی روی شبکه محلی، وای‌فای یا اینترنت باز نمی‌شود.
-- **ایزولاسیون بین کانتینرها:** ارتباط با کانتینر مدل‌های Ollama از طریق پروکسی داخلی (`127.0.0.1:11434`) انجام شده و از اینترنت بیرونی بی‌نیاز است.
-- **استریم زنده و بلادرنگ (SSE):** نمایش کلمه به کلمه توکن‌ها به همراه پشتیبانی از بلوک‌های تفکر مدل (Thinking/Reasoning Blocks) مانند مدل‌های سری `qwen3.5`.
-- **بدون نیاز به CDN و اینترنت:** فرانت‌اند مستقل با جاوااسکریپت خام (Vanilla JS) و استایل تم تیره که ۱۰۰٪ آفلاین عمل می‌کند.
-- **اسکریپت استقرار هوشمند و تعاملی:** اسکریپت `./deploy.sh` با قابلیت ساخت خودکار کانتینر دبیان ۱۳، ساخت محیط مجازی ایزوله پایتون (venv)، تایید مرحله‌به‌مرحله، کشف خودکار اولاما، ذخیره وضعیت و امکان ادامه از نقطه توقف.
-
----
-
-### معماری و سازوکار شبکه
-
-```text
-مرورگر سیستم میزبان (Host Desktop)
-     │
-     ▼ (دسترسی امن به http://127.0.0.1:8080)
-[Incus Proxy Device در میزبان: webui-proxy]
-     │
-     ▼ (هدایت ترافیک به 127.0.0.1:8080 داخل کانتینر)
-[کانتینر Incus: "webui"]
-  └── سرور ناهمگام FastAPI (سرویس e-webui.service)
-     │
-     ▼ (هدایت درخواست‌ها به 127.0.0.1:11434 از طریق ollama-link)
-[کانتینر Incus: "ollama"]
-  └── سرویس Ollama با شتاب‌دهنده گرافیکی GPU (مثلاً مدل qwen3.5:4b)
-```
-
----
-
-### راهنمای گام‌به‌گام نصب، راه‌اندازی و استفاده
-
-برای استفاده از `e-webui`، مراحل زیر را به ترتیب دنبال کنید. در هر مرحله توضیح داده شده است که چه کاری باید انجام دهید:
-
-#### گام ۱: بررسی پیش‌نیازها
-قبل از شروع، مطمئن شوید موارد زیر روی سیستم لینوکس شما مهیا هستند:
-1. موتور کانتینرساز **Incus** نصب و فعال باشد (`incus version`).
-2. کانتینر **ollama** که سرور Ollama را میزبانی می‌کند ساخته شده باشد و دست‌کم یک مدل روی آن دانلود شده باشد (مثلاً `qwen3.5:4b`):
-   ```bash
-   incus exec ollama -- ollama list
-   ```
-
-#### گام ۲: اجرای اسکریپت استقرار خودکار و هوشمند (`./deploy.sh`)
-در ریشه پروژه، اسکریپت استقرار تعاملی را اجرا کنید (نیازی به ساخت دستی کانتینر نیست؛ اسکریپت در صورت نبودن، کانتینر دبیان ۱۳ را خودکار می‌سازد):
-```bash
-./deploy.sh
-```
-
-> **توضیح عملکرد اسکریپت:**
-> اسکریپت نام کانتینر را از شما می‌پرسد (پیش‌فرض: `webui`) و مراحل زیر را به صورت تعاملی پیش می‌برد:
-> 0. **بررسی Incus و ساخت کانتینر:** بررسی نصب بودن Incus، ایجاد کانتینر Debian 13/stable در صورت نبودن، یا تشخیص کانتینر موجود و دریافت تایید برای ادامه.
-> 1. **تنظیم پروکسی‌ها و بررسی پورت:** بررسی آزاد بودن پورت ۸۰۸۰ در سیستم میزبان، تنظیم `webui-proxy` و کشف خودکار سرور Ollama و تنظیم `ollama-link`.
-> 2. **حل تداخل و پیش‌نیازها:** توقف سرویس‌های متداخل روی ۸۰۸۰ و نصب پکیج‌های سیستمی `python3-venv` و `curl`.
-> 3. **ایجاد محیط مجازی و انتقال فایل‌ها:** ساخت venv اختصاصی در `/opt/e-webui/venv`، انتقال فایل‌ها و نصب وابستگی‌ها بدون دستکاری پایتون اصلی سیستم.
-> 4. **ثبت سرویس Systemd:** ثبت، بارگذاری مجدد و فعال‌سازی سرویس `e-webui.service`.
-> 5. **بررسی سلامت و پروب HTTP:** تست پاسخ‌گویی واقعی وب‌سایت با HTTP 200 و بررسی ارتباط با اولاما.
-
-**گزینه‌های کاربردی خط فرمان (مدیریت چرخه عمر استقرار و پکیج‌های انتشار):**
-```bash
-# ساخت پکیج رسمی انتشار (تولید manifest.json و checksums.sha256 و فایل‌های payload):
-./build-release.sh
-
-# ساخت پکیج با تعیین نسخه دلخواه یا خروجی اختصاصی:
-./build-release.sh --version 1.0.1 --output-dir dist/releases
-
-# استقرار خودکار با مصرف جدیدترین پکیج ساخته‌شده در dist/releases:
-./deploy.sh e-webui-app
-
-# استقرار یا به‌روزرسانی با مشخص کردن مسیر مستقیم پکیج (پوشه یا فایل .tar.gz):
-./deploy.sh --update --release dist/releases/e-webui-1.0.0-20261106-120000-a1b2c3d4.tar.gz e-webui-app
-
-# به‌روزرسانی سریع بدون بازسازی کانتینر و بدون نصب مجدد پکیج‌های سیستم:
-./deploy.sh --update e-webui-app
-
-# بازگشت خودکار/دستی به نسخه سالم قبلی (Rollback):
-./deploy.sh --rollback e-webui-app
-
-# مشاهده وضعیت کامل استقرار، نسخه فعال، هش وابستگی‌ها و سلامت HTTP:
-./deploy.sh --status e-webui-app
-
-# عیب‌یابی خودکار، بازسازی پیوندها و اصلاح سرویس:
-./deploy.sh --repair e-webui-app
-
-# پاک‌سازی و حذف سرویس (با حفظ داده‌های پایدار shared/ به صورت پیش‌فرض):
-./deploy.sh --uninstall e-webui-app
-
-# حذف کامل به همراه پاک‌سازی داده‌های پایدار:
-./deploy.sh --uninstall --purge-data e-webui-app
-
-# تعیین پورت میزبان سفارشی (در صورت اشغال بودن ۸۰۸۰):
-./deploy.sh -p 8081 e-webui-app
-
-# تعیین آدرس صریح اولاما:
-./deploy.sh -o 192.168.1.50:11434 e-webui-app
-
-# استقرار خودکار بدون توقف برای تایید (Non-interactive):
-./deploy.sh -y e-webui-app
-```
-
-#### گام ۴: باز کردن و استفاده از رابط کاربری در مرورگر
-۱. مرورگر سیستم خود را باز کرده و به آدرس زیر بروید:
-   ```text
-   http://127.0.0.1:8080
-   ```
-۲. **بررسی وضعیت اتصال:** نشانگر وضعیت در بالای صفحه چپ باید سبز شده و عبارت **Ollama Online** را نمایش دهد.
-۳. **انتخاب مدل:** از منوی کشویی سمت راست بالا، مدل مورد نظر خود (مانند `qwen3.5:4b`) را انتخاب کنید.
-۴. **شروع چت:** در کادر ورودی پایین صفحه، پیام یا دستور خود را بنویسید:
-   - فشردن کلید `Enter`: ارسال پیام.
-   - فشردن همزمان `Shift + Enter`: ایجاد خط جدید در متن.
-۵. **مشاهده تفکر مدل:** در مدل‌های استدلال‌گر، یک بلوک بازشونده با عنوان **Thinking Process** ظاهر می‌شود که فرآیند تفکر مدل را به صورت زنده نمایش می‌دهد و پس از اتمام به شکل جمع‌شده درمی‌آید.
-۶. **امکانات کنترل چت:**
-   - دکمه **Stop**: برای توقف فوری پاسخ در حین تولید استریم.
-   - دکمه **Copy**: برای کپی سریع پاسخ مدل در کلیپ‌بورد.
-   - دکمه **Clear**: در هدر برای پاکسازی گفت‌وگو و شروع مجدد.
-
-#### گام ۵: متوقف کردن کانتینرها در پایان کار (اختیاری)
-هر زمان کارتان با مدل تمام شد و قصد آزادسازی منابع سیستم را داشتید:
-```bash
-# خاموش کردن کانتینر وب‌رابط
-incus stop webui
-
-# در صورت عدم نیاز به اولاما، خاموش کردن کانتینر اولاما
-incus stop ollama
-```
-هر زمان که مجدداً نیاز به استفاده داشتید، فقط کافیست دستور `incus start webui` را بزنید؛ رابط بدون نیاز به هیچ کانفیگی دوباره فوراً در مرورگر در دسترس خواهد بود!
-
----
-
-### مدیریت، عیب‌یابی و مانیتورینگ
-
-| عملیات | دستور در ترمینال |
-| :--- | :--- |
-| **مشاهده وضعیت زنده سرویس** | `incus exec webui -- systemctl status e-webui` |
-| **مشاهده لاگ‌های زنده (Live Logs)** | `incus exec webui -- journalctl -u e-webui -f` |
-| **راه‌اندازی مجدد سرویس** | `incus exec webui -- systemctl restart e-webui` |
-| **توقف سرویس** | `incus exec webui -- systemctl stop e-webui` |
-
----
-
-### اجرای تست‌های خودکار
-
-برای اطمینان از صحت عملکرد ماژول‌ها و یکپارچگی اندپوینت‌ها، تست‌های خودکار از طریق اسکریپت تعبیه شده در کانتینر اجرا می‌شوند:
-
-```bash
-# اجرای تست‌ها داخل کانتینر پیش‌فرض (webui)
-./scripts/test.sh
-
-# یا تعیین نام کانتینر خاص
-./scripts/test.sh webui
-```
-
----
-
-<br/>
+- [فارسی (Persian)](#فارسی-persian)
 
 ---
 
@@ -184,141 +19,136 @@ incus stop ollama
 
 A lightweight, ultra-secure, and responsive web interface (`e-webui`) for [Ollama](https://ollama.com/) running inside a dedicated [Incus](https://linuxcontainers.org/incus/) container (`webui`).
 
-Designed specifically to replace heavyweight multi-gigabyte UI suites (such as Open-WebUI) with an ultra-efficient application consuming **under 50 MB RAM** that starts automatically on container boot and exposes access strictly to the host machine.
+Designed specifically to replace heavyweight multi-gigabyte UI suites with an ultra-efficient application consuming **under 50 MB RAM** that starts automatically on container boot and exposes access strictly to the local host machine.
 
 ---
 
 ### Key Features
-- **Blazing Fast & Ultra-Light:** Uses ~40 MB RAM at runtime (compared to >1.2 GB for typical full-stack alternatives).
-- **Zero-Friction Auto-Start:** Runs as a native `systemd` service (`e-webui.service`). Whenever you run `incus start webui`, the web chat is ready in under 1 second.
-- **Strict Host-Only Security:** Binds exclusively to `127.0.0.1:8080` via an Incus host proxy device. No open ports on your local Wi-Fi or LAN.
-- **Inter-Container Isolation:** Communicates with the `ollama` container through an internal proxy device (`127.0.0.1:11434`), completely air-gapped from external networks.
-- **Real-Time Token Streaming:** Token-by-token streaming using Server-Sent Events (SSE) with support for model thinking/reasoning blocks (e.g., `qwen3.5:4b`).
-- **Zero CDN Dependencies:** Self-contained single-page chat interface built with Vanilla JS that works 100% offline.
-- **Interactive & Resumable Deployment:** Production-grade deployment script (`scripts/deploy.sh`) featuring step-by-step confirmation, persistent progress resumption, and automated rollback/conflict handling.
+
+- **Blazing Fast and Ultra-Light**: Consumes approximately 40 MB RAM at runtime (compared to over 1 GB for typical heavy web interfaces).
+- **Instant Systemd Startup**: Runs as a managed service (`e-webui.service`). Whenever you run `incus start webui`, the interface is ready in under 1 second.
+- **Strict Host-Only Isolation**: Binds exclusively to `127.0.0.1:8080` on the host machine via an Incus proxy device. No open ports on local networks or the internet.
+- **Inter-Container Communication**: Talks directly to the Ollama container via an internal proxy device (`127.0.0.1:11434`), remaining completely air-gapped from external networks.
+- **Real-Time Token Streaming**: Real-time response generation via Server-Sent Events (SSE).
+- **Thinking and Reasoning Mode**: Dedicated collapsible thought process block for deep reasoning models (such as `qwen3.5` or `deepseek-r1`), with a header toggle to enable or disable thinking visibility.
+- **Theme Customization**: Built-in toggle to switch smoothly between Light and Dark themes.
+- **Rich Markdown and Code Copy**: Renders Markdown headings, tables, quotes, and code blocks, featuring one-click copy buttons for code snippets and entire assistant responses.
+- **Zero External CDN Dependencies**: Bundled static frontend (Vanilla JS and marked.js) that operates 100% offline.
+- **Production-Grade Deployment**: Includes an interactive, resumable deployment manager (`./deploy.sh`) and an immutable release packager (`./build-release.sh`).
 
 ---
 
-### Architecture & Networking
+### Architecture and Networking
 
 ```text
 Host Browser (Desktop)
      │
-     ▼ (http://127.0.0.1:8080)
+     ▼ (Access http://127.0.0.1:8080)
 [Incus Host Proxy Device: webui-proxy]
      │
-     ▼ (127.0.0.1:8080 inside container)
+     ▼ (Forwards to 127.0.0.1:8080 inside container)
 [Incus Container: "webui"]
-  └── FastAPI Async Server (systemd: e-webui.service)
+  └── FastAPI Async Application (systemd: e-webui.service)
      │
-     ▼ (http://127.0.0.1:11434 via ollama-link proxy device)
+     ▼ (Forwards to 127.0.0.1:11434 via ollama-link)
 [Incus Container: "ollama"]
-  └── Ollama Daemon (GPU accelerated, e.g. qwen3.5:4b)
+  └── Ollama Service with GPU Acceleration (e.g., qwen3.5:4b)
 ```
 
 ---
 
-### Step-by-Step Getting Started & Usage Guide
+### Step-by-Step Getting Started Guide
 
-Follow these steps sequentially to deploy, access, and use `e-webui`:
+Follow these 5 simple steps to set up, deploy, and use `e-webui`:
 
 #### Step 1: Verify Prerequisites
-Ensure your Linux host environment has the following prerequisites configured:
-1. **Incus** is installed and functional (`incus version`).
-2. An **ollama** container exists and has at least one model downloaded (e.g., `qwen3.5:4b`):
+Ensure your Linux system has:
+1. **Incus** installed and active:
+   ```bash
+   incus version
+   ```
+2. An **ollama** container running with at least one model downloaded:
    ```bash
    incus exec ollama -- ollama list
    ```
 
-#### Step 2: Run the Deployment Script (`./deploy.sh`)
-Execute the deployment script directly from the project root. The script automatically launches a new Debian 13/stable container if it does not already exist:
+#### Step 2: Deploy the Application
+Run the deployment script from the project root:
 ```bash
 ./deploy.sh
 ```
 
-> **What happens during deployment:**
-> The script prompts for the target container name (defaults to `webui`) and executes the following modular steps:
-> 0. **Incus Check & Container Provisioning:** Checks `incus` installation and launches a Debian 13 / stable container if missing, or prompts to reuse an existing container.
-> 1. **Proxy Devices & Port Conflict Check:** Validates host port 8080, configures `webui-proxy`, auto-discovers the Ollama daemon, and sets up `ollama-link`.
-> 2. **Environment & Prerequisites:** Stops conflicting services and installs `python3-venv` and `curl`.
-> 3. **Python Virtual Environment & Code Sync:** Creates `/opt/e-webui/venv`, transfers application files, and installs dependencies strictly inside the virtualenv (PEP 668 compliant).
-> 4. **Systemd Configuration:** Registers and enables `e-webui.service`.
-> 5. **Live HTTP Health Verification:** Validates service status with an active HTTP 200 probe and confirms Ollama reachability.
+The script guides you through setup interactively:
+- Automatically creates a Debian 13/stable container if one does not already exist.
+- Configures host proxy devices (`webui-proxy` on port 8080) and inter-container links (`ollama-link`).
+- Creates an isolated Python virtual environment (`/opt/e-webui/venv`) and installs dependencies.
+- Registers, activates, and verifies the `e-webui.service` systemd unit.
+- Conducts an HTTP health check to ensure immediate readiness.
 
-**CLI Options & Commands (Release Packaging & Deployment Lifecycle):**
-```bash
-# Build an immutable release artifact package (generates manifest.json, checksums.sha256, and payload):
-./build-release.sh
-
-# Build a release package with custom version or strict git cleanliness check:
-./build-release.sh --version 1.0.1 --strict
-
-# Auto-detect mode (consumes newest release in dist/releases/):
-./deploy.sh e-webui-app
-
-# Deploy or update by explicitly pointing to a release package directory or .tar.gz bundle:
-./deploy.sh --update --release dist/releases/e-webui-1.0.0-20261106-120000-a1b2c3d4.tar.gz e-webui-app
-
-# Fast routine update without container recreation or OS package reinstall:
-./deploy.sh --update e-webui-app
-
-# Restore previous healthy release (Rollback):
-./deploy.sh --rollback e-webui-app
-
-# Inspect deployment state, active release ID, venv hash, and HTTP health:
-./deploy.sh --status e-webui-app
-
-# Self-heal broken symlinks, service units, and configuration:
-./deploy.sh --repair e-webui-app
-
-# Clean teardown (preserves shared/ persistent data by default):
-./deploy.sh --uninstall e-webui-app
-
-# Full teardown including deletion of persistent data:
-./deploy.sh --uninstall --purge-data e-webui-app
-
-# Specify custom host port:
-./deploy.sh -p 8081 e-webui-app
-
-# Specify custom Ollama URL:
-./deploy.sh -o 192.168.1.50:11434 e-webui-app
-
-# Non-interactive mode (auto-accept all steps):
-./deploy.sh -y e-webui-app
-```
-
-#### Step 4: Access and Use the Web Chat
-1. Open your host desktop browser and navigate to:
+#### Step 3: Access and Use the Web Chat
+1. Open your browser on the host system and navigate to:
    ```text
    http://127.0.0.1:8080
    ```
-2. **Connection Status Check:** The badge at top-left should turn green and show **Ollama Online**.
-3. **Select a Model:** Choose your model from the dropdown (e.g. `qwen3.5:4b`).
-4. **Sending Messages:**
-   - Press `Enter` to submit your prompt.
+2. **Connection Status**: Verify that the status badge in the top-left turns green and displays **Ollama Online**.
+3. **Select a Model**: Choose your preferred model from the dropdown menu in the header.
+4. **Send a Message**: Type your prompt into the input bar at the bottom:
+   - Press `Enter` to send your message.
    - Press `Shift + Enter` to insert a newline.
-5. **Reasoning / Thinking Blocks:** When querying reasoning models, a collapsible **Thinking Process** box unfolds in real-time and collapses upon completion.
-6. **Chat Controls:**
-   - **Stop Button:** Cancels ongoing stream generation.
-   - **Copy Button:** Copies assistant responses with a single click.
-   - **Clear Button:** Clears the chat history to start a fresh session.
+5. **Explore App Controls**:
+   - **Thinking Button**: Toggle model reasoning blocks on or off. When enabled, reasoning models display an expandable "Thinking Process" block.
+   - **Theme Toggle**: Switch between Light and Dark visual modes with the sun/moon button in the top bar.
+   - **Stop Button**: Interrupt message generation mid-stream.
+   - **Copy Actions**: Click the copy button below any assistant message or inside any code block to copy formatted text to your clipboard.
+   - **Clear Button**: Reset the active conversation history.
 
-#### Step 5: Shutting Down Containers (Optional)
-When you are done with your workflow:
+#### Step 4: Common Management and Lifecycle Commands
+You can manage the application lifecycle directly using `./deploy.sh`:
+
 ```bash
-# Stop the Web UI container
+# Check current deployment status, active release ID, and HTTP health:
+./deploy.sh --status webui
+
+# Perform a quick update without rebuilding the container:
+./deploy.sh --update webui
+
+# Restore the previous release version (Rollback):
+./deploy.sh --rollback webui
+
+# Automatically repair configuration, proxy links, or systemd services:
+./deploy.sh --repair webui
+
+# Package an immutable, verifiable release artifact:
+./build-release.sh
+
+# Deploy using a specific release package:
+./deploy.sh --update --release dist/releases/e-webui-1.0.0-*.tar.gz webui
+
+# Clean uninstallation (preserves persistent data by default):
+./deploy.sh --uninstall webui
+```
+
+#### Step 5: Stopping and Starting Containers (Optional)
+When you finish using the application:
+```bash
+# Stop the web UI container
 incus stop webui
 
-# Stop the Ollama container (if GPU/RAM release is desired)
+# Stop the Ollama container (to free up system memory and GPU)
 incus stop ollama
 ```
-Whenever you need it again, simply run `incus start webui` and refresh your browser!
+
+Whenever you want to use the application again, simply run:
+```bash
+incus start webui
+```
+The interface will be instantly available in your browser at `http://127.0.0.1:8080`.
 
 ---
 
-### Management & Troubleshooting
+### Service Administration Commands
 
-| Task | Command |
+| Action | Terminal Command |
 | :--- | :--- |
 | **Check Service Status** | `incus exec webui -- systemctl status e-webui` |
 | **View Live Streaming Logs** | `incus exec webui -- journalctl -u e-webui -f` |
@@ -329,13 +159,13 @@ Whenever you need it again, simply run `incus start webui` and refresh your brow
 
 ### Automated Testing
 
-Automated test suites (unit and integration tests) verify mock proxies, API endpoints, and streaming generators:
+To run the automated test suite within the container environment:
 
 ```bash
-# Run pytest inside the container
+# Run pytest inside the default container (webui)
 ./scripts/test.sh
 
-# Or specify custom container name
+# Or specify a custom container name
 ./scripts/test.sh webui
 ```
 
@@ -344,37 +174,206 @@ Automated test suites (unit and integration tests) verify mock proxies, API endp
 ### Project Structure
 
 ```text
-├── deploy.sh                  # Root executable wrapper delegating to scripts/deploy.sh
+├── deploy.sh                  # Root executable wrapper for deployment
+├── build-release.sh           # Root executable wrapper for release packaging
 ├── app/
-│   ├── config.py              # Environment variables & runtime constants
-│   ├── main.py                # FastAPI endpoints, CORS & static routing
-│   ├── models.py              # Pydantic schemas (requests, responses, SSE)
+│   ├── config.py              # Environment variables and application configuration
+│   ├── main.py                # FastAPI server, endpoints, and static routing
+│   ├── models.py              # Data models and SSE schemas
 │   ├── services/
 │   │   └── ollama_client.py   # Async HTTP streaming client for Ollama API
 │   ├── static/
 │   │   ├── index.html         # Single-page chat interface
-│   │   ├── style.css          # Dark-themed responsive stylesheet
-│   │   └── app.js             # SSE stream reader, DOM renderer & controls
+│   │   ├── style.css          # Theme-aware responsive stylesheet (light/dark)
+│   │   ├── app.js             # SSE stream handler, UI controls, and DOM renderer
+│   │   └── vendor/
+│   │       └── marked.min.js  # Offline Markdown parsing library
 │   └── systemd/
-│       └── e-webui.service    # Systemd unit definition for container boot
+│       └── e-webui.service    # Systemd service unit definition
 ├── scripts/
-│   ├── deploy.sh              # Resumable, interactive Incus deployment script
+│   ├── deploy.sh              # Full lifecycle management and deployment script
+│   ├── build-release.sh       # Release artifact packager with checksum verification
 │   └── test.sh                # Container-executed automated pytest runner
 ├── tests/
-│   ├── conftest.py            # Pytest test fixtures & mock responses
-│   ├── unit/                  # Unit tests for client & deployment logic
+│   ├── conftest.py            # Pytest test fixtures
+│   ├── unit/                  # Unit tests for deployment, packaging, and models
 │   └── integration/           # Integration tests for FastAPI endpoints
-└── specs/                     # Spec-Kit specifications and blueprints
+└── specs/                     # Spec-Kit specifications and task blueprints
 ```
 
 ---
 
 ### Environment Variables
 
-The application can be configured via environment variables (defined in `app/config.py` and `app/systemd/e-webui.service`):
-
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
-| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Target Ollama API endpoint inside the container |
-| `APP_HOST` | `0.0.0.0` | Bind IP for the FastAPI application |
-| `APP_PORT` | `8080` | Port on which the application listens |
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama API endpoint inside the container |
+| `APP_HOST` | `0.0.0.0` | Bind IP address for the FastAPI application |
+| `APP_PORT` | `8080` | Port on which the application listens inside container |
+
+---
+---
+
+# فارسی (Persian)
+
+رابط کاربری سبک، فوق‌العاده کم‌مصرف و ایزوله برای کار با مدل‌های محلی [Ollama](https://ollama.com/) درون کانتینر اختصاصی [Incus](https://linuxcontainers.org/incus/).
+
+این پروژه به عنوان جایگزینی کم‌حجم برای رابط‌های سنگین چند گیگابایتی طراحی شده است. `e-webui` در حالت اجرا فقط حدود **۴۰ مگابایت رم** مصرف می‌کند، به طور خودکار همزمان با کانتینر اجرا می‌شود و دسترسی به آن منحصراً به آدرس محلی سیستم میزبان محدود است.
+
+---
+
+### ویژگی‌های کلیدی
+
+- **سبک و بسیار سریع**: مصرف رم حدود ۴۰ مگابایت در حالت اجرا (در مقایسه با بیش از ۱ گیگابایت در سایر رابط‌های سنگین).
+- **راه‌اندازی خودکار با Systemd**: ثبت به عنوان سرویس سیستمی `e-webui.service`؛ بلافاصله پس از روشن شدن کانتینر (`incus start webui`) در کمتر از ۱ ثانیه در دسترس است.
+- **امنیت سخت‌گیرانه و محلی**: اتصال اختصاصی به `127.0.0.1:8080` در سیستم میزبان از طریق پروکسی Incus، بدون باز کردن هیچ پورتی روی شبکه محلی، وای‌فای یا اینترنت.
+- **ایزولاسیون کامل بین کانتینرها**: ارتباط با کانتینر Ollama از طریق پروکسی داخلی (`127.0.0.1:11434`) بدون نیاز به اتصال به شبکه بیرونی.
+- **استریم زنده و بلادرنگ (SSE)**: نمایش کلمه به کلمه پاسخ مدل با سرعت بالا.
+- **پشتیبانی از حالت تفکر و استدلال (Thinking Mode)**: نمایش فرآیند تفکر مدل‌های استدلال‌گر (مانند `qwen3.5` یا `deepseek-r1`) در بلوک بازشونده با امکان فعال یا غیرفعال کردن نمایش تفکر از هدر برنامه.
+- **پشتیبانی از تم تیره و روشن (Dark / Light)**: امکان تغییر تم با دکمه اختصاصی در بالای صفحه.
+- **رندر غنی Markdown و کپی آسان**: نمایش جداول، عناوین، لیست‌ها و بلوک‌های کد به همراه دکمه‌های کپی برای کل پاسخ و برای هر بلوک کد به صورت جداگانه.
+- **بدون وابستگی به CDN خارجی**: فرانت‌اند مستقل با استفاده از جاوااسکریپت خام و کتابخانه آفلاین marked.js که به صورت ۱۰۰٪ آفلاین کار می‌کند.
+- **مدیریت استقرار حرفه‌ای**: همراه با اسکریپت استقرار مرحله‌به‌مرحله و هوشمند (`./deploy.sh`) و ابزار ساخت پکیج رسمی انتشار (`./build-release.sh`).
+
+---
+
+### معماری و ارتباطات شبکه
+
+```text
+مرورگر سیستم میزبان (Host Desktop)
+     │
+     ▼ (دسترسی به آدرس http://127.0.0.1:8080)
+[Incus Host Proxy Device: webui-proxy]
+     │
+     ▼ (هدایت ترافیک به 127.0.0.1:8080 داخل کانتینر)
+[کانتینر Incus: "webui"]
+  └── سرور FastAPI (سرویس e-webui.service)
+     │
+     ▼ (هدایت درخواست‌ها به 127.0.0.1:11434 از طریق ollama-link)
+[کانتینر Incus: "ollama"]
+  └── سرویس Ollama با شتاب‌دهنده گرافیکی GPU (مثلاً مدل qwen3.5:4b)
+```
+
+---
+
+### راهنمای گام‌به‌گام نصب، راه‌اندازی و استفاده
+
+برای راه‌اندازی و استفاده از برنامه، این ۵ گام ساده را دنبال کنید:
+
+#### گام ۱: بررسی پیش‌نیازها
+مطمئن شوید موارد زیر در سیستم شما فعال هستند:
+1. موتور کانتینرساز **Incus** نصب و فعال باشد:
+   ```bash
+   incus version
+   ```
+2. کانتینر **ollama** در حال اجرا بوده و حداقل یک مدل روی آن دانلود شده باشد:
+   ```bash
+   incus exec ollama -- ollama list
+   ```
+
+#### گام ۲: اجرای اسکریپت استقرار
+در پوشه اصلی پروژه، اسکریپت استقرار را اجرا کنید:
+```bash
+./deploy.sh
+```
+
+اسکریپت مراحل را به صورت خودکار و تعاملی پیش می‌برد:
+- در صورت عدم وجود کانتینر، به طور خودکار کانتینر Debian 13/stable را ایجاد می‌کند.
+- پروکسی میزبان (`webui-proxy` روی پورت ۸۰۸۰) و لینک ارتباطی با اولاما (`ollama-link`) را تنظیم می‌کند.
+- محیط مجازی ایزوله پایتون (`/opt/e-webui/venv`) ساخته و وابستگی‌ها را نصب می‌نماید.
+- سرویس سیستمی `e-webui.service` را ثبت، راه‌اندازی و فعال می‌کند.
+- با پروب سلامت HTTP بررسی می‌کند که وب‌رابط با موفقیت در حال پاسخ‌گویی است.
+
+#### گام ۳: باز کردن و استفاده از رابط کاربری در مرورگر
+۱. در سیستم خود مرورگر را باز کرده و به نشانی زیر بروید:
+   ```text
+   http://127.0.0.1:8080
+   ```
+۲. **بررسی وضعیت اتصال**: نشانگر بالا سمت چپ باید سبز شده و عبارت **Ollama Online** را نمایش دهد.
+۳. **انتخاب مدل**: از منوی کشویی در هدر، مدل دلخواه خود را انتخاب کنید.
+۴. **ارسال پیام**: پیام خود را در کادر متنی پایین صفحه بنویسید:
+   - فشردن کلید `Enter`: ارسال پیام.
+   - فشردن همزمان `Shift + Enter`: ایجاد خط جدید در متن.
+۵. **امکانات رابط کاربری**:
+   - **دکمه Thinking**: فعال یا غیرفعال کردن نمایش بخش تفکر مدل در پاسخ‌های استدلالی.
+   - **تغییر تم**: تغییر تم بین روشن و تیره با دکمه آیکون خورشید/ماه در هدر.
+   - **دکمه Stop**: توقف فوری در حین تولید پاسخ استریم.
+   - **عملیات کپی**: کپی آسان متن کل پاسخ یا هر بلوک کد به صورت جداگانه در کلیپ‌بورد.
+   - **دکمه Clear**: پاک‌سازی پیام‌های گفت‌وگو و شروع مجدد.
+
+#### گام ۴: دستورات کاربردی مدیریت و چرخه عمر برنامه
+می‌توانید با استفاده از `./deploy.sh` استقرار را مدیریت کنید:
+
+```bash
+# مشاهده وضعیت کامل استقرار، شناسه پکیج فعال و سلامت HTTP:
+./deploy.sh --status webui
+
+# به‌روزرسانی سریع بدون بازسازی کانتینر و بسته‌های سیستمی:
+./deploy.sh --update webui
+
+# بازگشت خودکار به نسخه سالم قبلی (Rollback):
+./deploy.sh --rollback webui
+
+# عیب‌یابی و اصلاح خودکار پروکسی‌ها، لینک‌ها و سرویس:
+./deploy.sh --repair webui
+
+# ساخت پکیج رسمی و تاییدشده انتشار (همراه با manifest و checksum):
+./build-release.sh
+
+# استقرار یا ارتقا با فایل پکیج مشخص:
+./deploy.sh --update --release dist/releases/e-webui-1.0.0-*.tar.gz webui
+
+# حذف سرویس و استقرار (با حفظ داده‌های پایدار به صورت پیش‌فرض):
+./deploy.sh --uninstall webui
+```
+
+#### گام ۵: خاموش و روشن کردن کانتینرها در پایان کار (اختیاری)
+هنگامی که کارتان با برنامه تمام شد:
+```bash
+# خاموش کردن کانتینر رابط وب
+incus stop webui
+
+# در صورت تمایل، خاموش کردن کانتینر اولاما برای آزادسازی رم و پردازنده گرافیکی
+incus stop ollama
+```
+
+هر زمان مجدداً نیاز به استفاده داشتید، فقط کافی است دستور زیر را اجرا کنید:
+```bash
+incus start webui
+```
+رابط کاربری فوراً در نشانی `http://127.0.0.1:8080` در دسترس خواهد بود.
+
+---
+
+### دستورات مدیریت سرویس
+
+| عملیات | دستور در ترمینال |
+| :--- | :--- |
+| **مشاهده وضعیت سرویس** | `incus exec webui -- systemctl status e-webui` |
+| **مشاهده لاگ‌های زنده** | `incus exec webui -- journalctl -u e-webui -f` |
+| **راه‌اندازی مجدد سرویس** | `incus exec webui -- systemctl restart e-webui` |
+| **توقف سرویس** | `incus exec webui -- systemctl stop e-webui` |
+
+---
+
+### اجرای تست‌های خودکار
+
+برای اجرای تست‌های خودکار در محیط کانتینر:
+
+```bash
+# اجرای pytest درون کانتینر پیش‌فرض (webui)
+./scripts/test.sh
+
+# یا با تعیین نام کانتینر سفارشی
+./scripts/test.sh webui
+```
+
+---
+
+### متغیرهای محیطی
+
+| متغیر | مقدار پیش‌فرض | توضیحات |
+| :--- | :--- | :--- |
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | آدرس اندپوینت اولاما داخل کانتینر |
+| `APP_HOST` | `0.0.0.0` | آدرس آی‌پی گوش فرا دادن برنامه FastAPI |
+| `APP_PORT` | `8080` | پورت برنامه داخل کانتینر |
