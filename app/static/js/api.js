@@ -34,7 +34,7 @@ export class ApiClient {
 
   /**
    * Dispatches model inference and reads SSE response stream
-   * @param {{ model: string, prompt: string, system?: string, stream?: boolean, thinking?: boolean, temperature?: number }} payload
+   * @param {{ model: string, prompt: string, history?: Array<{role: string, content: string}>, system?: string, stream?: boolean, thinking?: boolean, temperature?: number }} payload
    * @param {{
    *   onToken: (token: string) => void,
    *   onThinking: (chunk: string) => void,
@@ -53,6 +53,7 @@ export class ApiClient {
         body: JSON.stringify({
           model: payload.model,
           prompt: payload.prompt,
+          history: payload.history || [],
           system: payload.system || null,
           stream: payload.stream !== false,
           thinking: payload.thinking !== false,
@@ -62,7 +63,22 @@ export class ApiClient {
       });
 
       if (!resp.ok) {
-        throw new Error(`Server returned HTTP ${resp.status} ${resp.statusText}`);
+        let errorDetail = '';
+        try {
+          const errJson = await resp.json();
+          errorDetail = errJson.detail || JSON.stringify(errJson);
+        } catch (_) {
+          try {
+            errorDetail = await resp.text();
+          } catch (_) {}
+        }
+        const errorMsg = errorDetail
+          ? `HTTP ${resp.status} ${resp.statusText}: ${errorDetail}`
+          : `HTTP ${resp.status} ${resp.statusText}`;
+        const err = new Error(errorMsg);
+        err.status = resp.status;
+        err.statusText = resp.statusText;
+        throw err;
       }
 
       if (!resp.body) {
@@ -88,33 +104,60 @@ export class ApiClient {
           const jsonStr = trimmed.slice(5).trim();
           if (!jsonStr) continue;
 
+          let data;
           try {
-            const data = JSON.parse(jsonStr);
-
-            if (data.error) {
-              throw new Error(data.error);
-            }
-
-            if (data.thinking && onThinking) {
-              onThinking(data.thinking);
-            }
-
-            if (data.token && onToken) {
-              onToken(data.token);
-            }
-
-            if (data.done) {
-              if (onDone) {
-                onDone({
-                  eval_count: data.eval_count,
-                  total_duration: data.total_duration
-                });
-              }
-              return;
-            }
+            data = JSON.parse(jsonStr);
           } catch (jsonErr) {
             console.warn('Failed to parse SSE line:', jsonStr, jsonErr);
+            continue;
           }
+
+          if (data.error) {
+            const streamErr = new Error(data.error);
+            streamErr.status = 500;
+            if (onError) onError(streamErr);
+            return;
+          }
+
+          if (data.thinking && onThinking) {
+            onThinking(data.thinking);
+          }
+
+          if (data.token && onToken) {
+            onToken(data.token);
+          }
+
+          if (data.done) {
+            if (onDone) {
+              onDone({
+                eval_count: data.eval_count,
+                total_duration: data.total_duration
+              });
+            }
+            return;
+          }
+        }
+      }
+
+      buffer += decoder.decode();
+      if (buffer.trim().startsWith('data:')) {
+        const jsonStr = buffer.trim().slice(5).trim();
+        if (jsonStr) {
+          try {
+            const data = JSON.parse(jsonStr);
+            if (data.error) {
+              const streamErr = new Error(data.error);
+              streamErr.status = 500;
+              if (onError) onError(streamErr);
+              return;
+            }
+            if (data.thinking && onThinking) onThinking(data.thinking);
+            if (data.token && onToken) onToken(data.token);
+            if (data.done && onDone) {
+              onDone({ eval_count: data.eval_count, total_duration: data.total_duration });
+              return;
+            }
+          } catch (_) {}
         }
       }
 

@@ -42,6 +42,36 @@ function escapeHtml(text) {
 }
 
 /**
+ * Extracts <think>...</think> content if embedded in raw markdown text
+ * @param {string} text
+ * @returns {{ thinking: string | null, content: string }}
+ */
+export function extractThinking(text) {
+  if (!text) return { thinking: null, content: '' };
+
+  if (text.includes('<think>')) {
+    const parts = text.split('<think>');
+    const before = parts[0];
+    const after = parts.slice(1).join('<think>');
+    if (after.includes('</think>')) {
+      const [thinkContent, ...rest] = after.split('</think>');
+      const remainingContent = (before + rest.join('</think>')).trim();
+      return {
+        thinking: thinkContent.trim(),
+        content: remainingContent
+      };
+    } else {
+      // Unclosed <think> (in-flight stream)
+      return {
+        thinking: after.trim(),
+        content: before.trim()
+      };
+    }
+  }
+  return { thinking: null, content: text };
+}
+
+/**
  * Parses markdown to safe sanitized HTML
  * @param {string} text
  * @returns {string}
@@ -49,12 +79,16 @@ function escapeHtml(text) {
 export function renderMarkdown(text) {
   if (!text) return '';
 
+  // Extract any raw <think> tags if passed into markdown directly
+  const { content } = extractThinking(text);
+  if (!content) return '';
+
   let rawHtml = '';
   if (typeof window.marked !== 'undefined') {
     const renderer = getMarkedRenderer();
-    rawHtml = window.marked.parse(text, { renderer, breaks: true, gfm: true });
+    rawHtml = window.marked.parse(content, { renderer, breaks: true, gfm: true });
   } else {
-    rawHtml = `<p>${escapeHtml(text)}</p>`;
+    rawHtml = `<p>${escapeHtml(content)}</p>`;
   }
 
   // Sanitize with DOMPurify

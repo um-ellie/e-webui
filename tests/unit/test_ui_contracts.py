@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-CONTRACT_FILE = WORKSPACE_ROOT / "specs/012-chat-ui-redesign/contracts/ui-features.json"
+CONTRACT_FILE = WORKSPACE_ROOT / "specs/013-chat-connection-refinements/contracts/ui-features.json"
 FEATURES_JS_FILE = WORKSPACE_ROOT / "app/static/js/features.js"
 
 
@@ -25,10 +25,19 @@ class TestUIContracts(unittest.TestCase):
         # Check key working controls
         self.assertEqual(default_controls["chat.send"]["status"], "enabled")
         self.assertEqual(default_controls["chat.stop"]["status"], "enabled")
+        self.assertEqual(default_controls["chat.model_select"]["status"], "enabled")
         self.assertEqual(default_controls["session.new"]["status"], "enabled")
 
         # Check key future controls have disabled status and reason
-        future_controls = ["chat.attach_file", "chat.tools_menu", "chat.export", "session.pin", "nav.library"]
+        future_controls = [
+            "chat.mic_input",
+            "chat.manage_models",
+            "chat.attach_file",
+            "chat.tools_menu",
+            "chat.export",
+            "session.pin",
+            "nav.library"
+        ]
         for c in future_controls:
             self.assertIn(c, default_controls)
             self.assertEqual(default_controls[c]["status"], "disabled")

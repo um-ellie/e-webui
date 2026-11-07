@@ -83,6 +83,30 @@ export class Sidebar {
       });
     }
 
+    const brandLink = this.container.querySelector('.brand-link');
+    if (brandLink) {
+      brandLink.addEventListener('click', (e) => {
+        if (this.isCollapsed) {
+          e.preventDefault();
+          this.isCollapsed = false;
+          try {
+            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
+          } catch (_) {}
+          this.applyCollapsedState(false);
+        }
+      });
+    }
+
+    // Backdrop dismissal on mobile/tablet
+    document.addEventListener('click', (e) => {
+      if (window.innerWidth < 1024 && this.container.classList.contains('open')) {
+        const toggleBtn = document.querySelector('.mobile-menu-toggle');
+        if (!this.container.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
+          this.container.classList.remove('open');
+        }
+      }
+    });
+
     if (this.searchInput) {
       this.searchInput.addEventListener('input', (e) => {
         this.searchQuery = e.target.value.toLowerCase().trim();

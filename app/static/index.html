@@ -27,13 +27,18 @@
     <aside class="sidebar" aria-label="Chat navigation">
       <div class="sidebar-header">
         <a href="/" class="brand-link" aria-label="e-webui home">
-          <svg viewBox="25 21 162 48" role="img" aria-label="Ellie logo" class="logo" height="26">
+          <svg viewBox="25 21 162 48" role="img" aria-label="Ellie logo" class="logo logo-full hide-collapsed" height="26">
             <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
             <path d="M67 45C67 38.5 71.5 36.5 75 41C78 44.8 81 44 81.2 37" fill="none" stroke="var(--purple)" stroke-width="4.6"/>
             <path d="M98 29H104.2L92.2 58.6H86Z" fill="var(--purple)"/>
             <circle cx="116" cy="52.8" r="4.1" fill="var(--purple)"/>
             <path d="M128 30H144.5V35.2H134V40H143.5V45H134V51H144.5V56H128Z" fill="var(--purple)"/>
             <rect class="logo-cursor" x="160" y="56.2" width="19" height="4.8" fill="var(--purple)"/>
+          </svg>
+          <svg viewBox="28 28 88 34" role="img" aria-label="Ellie mark" class="mark logo-compact show-collapsed" height="22" style="display:none">
+            <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
+            <path d="M60 30H76.5V35.2H66V40H75.5V45H66V51H76.5V56H60Z" fill="var(--purple)"/>
+            <rect class="logo-cursor" x="84" y="56.2" width="18" height="4.8" fill="var(--purple)"/>
           </svg>
         </a>
         <button class="btn-icon btn-collapse-sidebar" type="button" aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)">
@@ -102,10 +107,6 @@
         </div>
 
         <div class="header-right">
-          <select class="header-model-select pill-dropdown" aria-label="Select model">
-            <option value="">Loading models...</option>
-          </select>
-
           <button class="btn-icon btn-share" type="button" aria-label="Share conversation">
             <svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
           </button>
@@ -129,9 +130,6 @@
               </svg>
             </div>
             <h1 class="empty-greeting">Good evening, Ellie</h1>
-            <div class="suggestion-chips-grid">
-              <!-- Dynamically populated by empty.js -->
-            </div>
           </div>
 
           <!-- Message Turns Container -->
@@ -178,10 +176,36 @@
 
               <div style="flex:1"></div>
 
-              <span class="composer-model-pill" style="font-size:12px;color:var(--mute);margin-right:8px"></span>
+              <!-- Model Picker Pill and Popover Menu -->
+              <div class="mw">
+                <button class="mp" id="mp" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose model">
+                  <span class="mg"></span>
+                  <span class="mn" id="mn">Loading…</span>
+                  <span class="mt" id="mtg" style="display:none"></span>
+                  <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M6 15l6-6 6 6"/></svg>
+                </button>
+                <div class="pop" id="pop" role="listbox" aria-label="Models" hidden>
+                  <div class="mh">Models</div>
+                  <div class="model-search-box" id="model-search-box" style="display:none;padding:0 8px 8px">
+                    <input type="search" class="model-search-input" id="model-search-input" placeholder="Search models..." aria-label="Search models" style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;outline:none" />
+                  </div>
+                  <div class="model-items-list" id="model-items-list" role="presentation">
+                    <!-- populated dynamically -->
+                  </div>
+                  <div class="mf" aria-disabled="true" title="Not available yet">
+                    Manage models<span class="tag">Not available yet</span>
+                  </div>
+                </div>
+              </div>
 
-              <button class="btn-send" type="button" aria-label="Send message" title="Send (Enter)">
-                <svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              <!-- Microphone input button (disabled) -->
+              <button class="mic" type="button" disabled aria-label="Voice input" title="Voice input is not available yet" data-control-id="chat.mic_input">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+              </button>
+
+              <!-- Send button (Enter key return symbol) -->
+              <button class="sendb btn-send" type="button" aria-label="Send message (Enter)" title="Send (Enter)">
+                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4v7a4 4 0 0 1-4 4H4"/><path d="M9 10l-5 5 5 5"/></svg>
               </button>
             </div>
           </div>

@@ -61,6 +61,11 @@ export class ChatStore extends EventEmitter {
 
   setDefaultModel(modelName) {
     this.defaultModel = modelName;
+    const active = this.activeSessionId ? this.sessions.get(this.activeSessionId) : null;
+    if (active && (!active.model || active.model === '')) {
+      active.model = modelName;
+      this.emit('session:updated', active);
+    }
   }
 
   /**
@@ -71,12 +76,19 @@ export class ChatStore extends EventEmitter {
    */
   createSession(title = 'New conversation', model = null) {
     const now = Date.now();
+    let savedModel = null;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        savedModel = localStorage.getItem('ewebui_last_model');
+      }
+    } catch (_) {}
+
     const session = {
       id: this._generateId(),
       title: title.slice(0, 120),
       createdAt: now,
       updatedAt: now,
-      model: model || this.defaultModel || '',
+      model: model || savedModel || this.defaultModel || '',
       messages: []
     };
 
@@ -167,6 +179,22 @@ export class ChatStore extends EventEmitter {
    */
   listSessions() {
     return Array.from(this.sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  /**
+   * Retrieves chronological history of dialogue turns formatted for Ollama
+   * @param {string} sessionId
+   * @returns {Array<{role: string, content: string}>}
+   */
+  getHistory(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.messages) return [];
+    return session.messages
+      .filter((m) => m.status === 'completed' && m.content)
+      .map((m) => ({
+        role: m.role,
+        content: m.content
+      }));
   }
 
   /**

@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UIFeatureRegistryContractV2",
+  "description": "Registry defining interface controls and availability states for feature 013",
+  "type": "object",
+  "default": {
+    "chat.send": { "status": "enabled", "shortcut": "Enter" },
+    "chat.stop": { "status": "enabled", "shortcut": "Esc" },
+    "chat.model_select": { "status": "enabled" },
+    "chat.mic_input": { "status": "disabled", "reason": "Voice input is not available yet" },
+    "chat.manage_models": { "status": "disabled", "reason": "Manage models is not available yet" },
+    "chat.theme_toggle": { "status": "enabled" },
+    "chat.font_size": { "status": "enabled" },
+    "chat.think_toggle": { "status": "enabled" },
+    "chat.attach_file": { "status": "disabled", "reason": "File upload is not available yet" },
+    "chat.tools_menu": { "status": "disabled", "reason": "Tools are not available yet" },
+    "chat.export": { "status": "disabled", "reason": "Export is not available yet" },
+    "chat.share": { "status": "disabled", "reason": "Sharing is not available yet" },
+    "session.new": { "status": "enabled", "shortcut": "Ctrl+Shift+O" },
+    "session.search": { "status": "enabled", "shortcut": "Ctrl+K" },
+    "session.rename": { "status": "enabled" },
+    "session.delete": { "status": "enabled" },
+    "session.pin": { "status": "disabled", "reason": "Pinning chats is not available yet" },
+    "nav.sidebar_toggle": { "status": "enabled", "shortcut": "Ctrl+B" },
+    "nav.library": { "status": "disabled", "reason": "Prompt library is not available yet" },
+    "nav.tools": { "status": "disabled", "reason": "Tools catalog is not available yet" }
+  }
+}

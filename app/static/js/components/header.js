@@ -1,23 +1,19 @@
 /**
  * Header Component
- * Manages active chat title editing, model selector dropdown from /api/models,
- * Share button, and overflow actions.
+ * Manages active chat title editing, Share button, and overflow actions.
  */
 
 import { store } from '../store.js';
-import { api } from '../api.js';
 import { bindFeatureControl } from '../features.js';
 
 export class Header {
   constructor(container) {
     this.container = container;
     this.titleElement = container.querySelector('.header-chat-title');
-    this.modelSelect = container.querySelector('.header-model-select');
     this.btnShare = container.querySelector('.btn-share');
     this.btnOverflow = container.querySelector('.btn-header-overflow');
     this.mobileToggle = container.querySelector('.mobile-menu-toggle');
 
-    this.models = [];
     this.init();
   }
 
@@ -26,7 +22,6 @@ export class Header {
     this.setupTitleEditing();
     this.setupMobileToggle();
     this.setupOverflowMenu();
-    this.loadModels();
 
     // Listen to store updates
     store.on('session:active-changed', (session) => this.update(session));
@@ -91,54 +86,6 @@ export class Header {
       input.focus();
       input.select();
     });
-  }
-
-  async loadModels() {
-    if (!this.modelSelect) return;
-
-    try {
-      const resp = await api.getModels();
-      this.models = resp.models || [];
-
-      this.modelSelect.innerHTML = '';
-      if (this.models.length === 0) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = 'No models available';
-        this.modelSelect.appendChild(opt);
-        this.modelSelect.disabled = true;
-        return;
-      }
-
-      for (const m of this.models) {
-        const opt = document.createElement('option');
-        opt.value = m.name;
-        opt.textContent = m.parameter_size ? `${m.name} (${m.parameter_size})` : m.name;
-        this.modelSelect.appendChild(opt);
-      }
-
-      const defaultName = resp.default_model || this.models[0].name;
-      store.setDefaultModel(defaultName);
-
-      const active = store.getActiveSession();
-      if (active && !active.model) {
-        store.updateSession(active.id, { model: defaultName });
-      }
-
-      this.modelSelect.value = (active && active.model) || defaultName;
-      this.modelSelect.disabled = false;
-
-      this.modelSelect.addEventListener('change', () => {
-        const active = store.getActiveSession();
-        if (active) {
-          store.updateSession(active.id, { model: this.modelSelect.value });
-        }
-      });
-    } catch (err) {
-      console.warn('Could not load models from API:', err);
-      this.modelSelect.innerHTML = '<option value="">Ollama offline</option>';
-      this.modelSelect.disabled = true;
-    }
   }
 
   setupOverflowMenu() {
@@ -208,9 +155,6 @@ export class Header {
     if (!session) return;
     if (this.titleElement) {
       this.titleElement.textContent = session.title || 'New conversation';
-    }
-    if (this.modelSelect && session.model) {
-      this.modelSelect.value = session.model;
     }
   }
 }

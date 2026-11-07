@@ -101,9 +101,23 @@ class OllamaClient:
         self, req: PromptRequest
     ) -> AsyncGenerator[str, None]:
         """Streams generated tokens from Ollama /api/generate via SSE format."""
+        # Format history if present
+        if req.history:
+            history_lines = []
+            for turn in req.history:
+                role = turn.get("role", "user").capitalize()
+                content = turn.get("content", "").strip()
+                if content:
+                    history_lines.append(f"{role}: {content}")
+            history_lines.append(f"User: {req.prompt}")
+            history_lines.append("Assistant:")
+            prompt_payload = "\n\n".join(history_lines)
+        else:
+            prompt_payload = req.prompt
+
         payload: Dict[str, Any] = {
             "model": req.model,
-            "prompt": req.prompt,
+            "prompt": prompt_payload,
             "stream": True,
             "options": {
                 "temperature": req.temperature,
@@ -117,44 +131,73 @@ class OllamaClient:
 
         url = f"{self.base_url}/api/generate"
 
+        in_think = False
+        think_buffer = ""
+
         try:
             client = self.get_http_client()
             async with client.stream("POST", url, json=payload) as response:
-                    if response.status_code != 200:
-                        err_text = await response.aread()
-                        err_msg = f"Ollama returned HTTP {response.status_code}: {err_text.decode('utf-8', errors='ignore')}"
-                        logger.error(err_msg)
-                        chunk = StreamChunk(done=True, error=err_msg)
+                if response.status_code != 200:
+                    err_text = await response.aread()
+                    err_msg = f"Ollama returned HTTP {response.status_code}: {err_text.decode('utf-8', errors='ignore')}"
+                    logger.error(err_msg)
+                    chunk = StreamChunk(done=True, error=err_msg, status="error")
+                    yield f"data: {chunk.model_dump_json()}\n\n"
+                    return
+
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        parsed = json.loads(line)
+                        raw_token = parsed.get("response", "")
+                        thinking = parsed.get("thinking", None)
+                        done = bool(parsed.get("done", False))
+
+                        token = ""
+
+                        # If raw response contains <think> tags (e.g. DeepSeek-R1 / Qwen reasoning)
+                        if "<think>" in raw_token or in_think:
+                            current_text = raw_token
+                            if "<think>" in current_text:
+                                before_think, after_think = current_text.split("<think>", 1)
+                                if before_think:
+                                    token += before_think
+                                in_think = True
+                                current_text = after_think
+
+                            if in_think:
+                                if "</think>" in current_text:
+                                    inside_think, after_think = current_text.split("</think>", 1)
+                                    thinking = (thinking or "") + inside_think
+                                    in_think = False
+                                    token += after_think
+                                else:
+                                    thinking = (thinking or "") + current_text
+                            else:
+                                token += current_text
+                        else:
+                            token = raw_token
+
+                        if not req.thinking:
+                            thinking = None
+                            if not token and not done:
+                                continue
+
+                        chunk = StreamChunk(
+                            token=token,
+                            thinking=thinking,
+                            done=done,
+                            status="completed" if done else "streaming",
+                            eval_count=parsed.get("eval_count"),
+                            total_duration=parsed.get("total_duration"),
+                        )
                         yield f"data: {chunk.model_dump_json()}\n\n"
-                        return
-
-                    async for line in response.aiter_lines():
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            parsed = json.loads(line)
-                            token = parsed.get("response", "")
-                            thinking = parsed.get("thinking", None)
-                            done = bool(parsed.get("done", False))
-
-                            if not req.thinking:
-                                thinking = None
-                                if not token and not done:
-                                    continue
-
-                            chunk = StreamChunk(
-                                token=token,
-                                thinking=thinking,
-                                done=done,
-                                eval_count=parsed.get("eval_count"),
-                                total_duration=parsed.get("total_duration"),
-                            )
-                            yield f"data: {chunk.model_dump_json()}\n\n"
-                            if done:
-                                break
-                        except json.JSONDecodeError:
-                            continue
+                        if done:
+                            break
+                    except json.JSONDecodeError:
+                        continue
 
         except httpx.ConnectError:
             err_msg = "Cannot connect to Ollama. Verify the container and proxy are running."

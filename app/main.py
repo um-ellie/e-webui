@@ -1,6 +1,8 @@
 """FastAPI application entrypoint and route handlers."""
 
 import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, status
@@ -118,14 +120,44 @@ async def list_models():
 @app.post("/api/generate")
 async def generate_response(request: PromptRequest):
     """Streams token generation from Ollama using Server-Sent Events."""
-    logger.info(f"Generating with model='{request.model}', prompt length={len(request.prompt)}")
+    req_id = str(uuid.uuid4())[:8]
+    start_time = time.monotonic()
+    logger.info(
+        f"[{req_id}] Generation started: model='{request.model}', "
+        f"prompt_len={len(request.prompt)}, history_turns={len(request.history)}"
+    )
+
+    async def logged_stream():
+        first_token_time = None
+        error_category = None
+        try:
+            async for chunk in ollama_client.stream_generate(request):
+                if first_token_time is None:
+                    first_token_time = time.monotonic()
+                    ttft = (first_token_time - start_time) * 1000
+                    logger.info(f"[{req_id}] First token emitted after {ttft:.1f}ms")
+                if '"error":' in chunk and '"error":null' not in chunk:
+                    error_category = "OllamaError"
+                yield chunk
+        except Exception as exc:
+            error_category = type(exc).__name__
+            logger.error(f"[{req_id}] Stream failed with category={error_category}: {exc}")
+            raise
+        finally:
+            total_duration = (time.monotonic() - start_time) * 1000
+            logger.info(
+                f"[{req_id}] Generation ended: total_duration={total_duration:.1f}ms, "
+                f"error_category={error_category or 'none'}"
+            )
+
     return StreamingResponse(
-        ollama_client.stream_generate(request),
+        logged_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Request-ID": req_id,
         },
     )
 

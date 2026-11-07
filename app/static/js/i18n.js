@@ -33,7 +33,15 @@ export const STRINGS = {
     file_upload_disabled: 'File upload is not available yet',
     copy: 'Copy',
     copied: 'Copied!',
-    reasoning: 'Reasoning'
+    reasoning: 'Reasoning',
+    mic_tooltip: 'Voice input is not available yet',
+    manage_models_disabled: 'Manage models is not available yet',
+    loading_model: 'Loading model…',
+    retry: 'Retry',
+    reasoning_only: 'The model returned only reasoning',
+    search_models: 'Search models...',
+    send_enter: 'Send (Enter)',
+    stop_generation: 'Stop generation'
   },
   fa: {
     app_title: 'e-webui',
@@ -64,7 +72,15 @@ export const STRINGS = {
     file_upload_disabled: 'بارگذاری فایل هنوز در دسترس نیست',
     copy: 'رونوشت',
     copied: 'کپی شد!',
-    reasoning: 'استدلال'
+    reasoning: 'استدلال',
+    mic_tooltip: 'ورودی صوتی هنوز در دسترس نیست',
+    manage_models_disabled: 'مدیریت مدل‌ها هنوز در دسترس نیست',
+    loading_model: 'در حال بارگذاری مدل...',
+    retry: 'تلاش مجدد',
+    reasoning_only: 'مدل فقط استدلال ارائه کرد',
+    search_models: 'جستجوی مدل‌ها...',
+    send_enter: 'ارسال (Enter)',
+    stop_generation: 'توقف تولید'
   }
 };
 

@@ -12,6 +12,8 @@ export const FEATURE_REGISTRY = {
   'chat.send': { status: 'enabled', shortcut: 'Enter' },
   'chat.stop': { status: 'enabled', shortcut: 'Esc' },
   'chat.model_select': { status: 'enabled' },
+  'chat.mic_input': { status: 'disabled', reason: 'Voice input is not available yet' },
+  'chat.manage_models': { status: 'disabled', reason: 'Manage models is not available yet' },
   'chat.theme_toggle': { status: 'enabled' },
   'chat.font_size': { status: 'enabled' },
   'chat.think_toggle': { status: 'enabled' },

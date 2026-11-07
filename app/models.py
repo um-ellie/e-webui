@@ -20,6 +20,10 @@ class PromptRequest(BaseModel):
         max_length=100000,
         description="User prompt text, cannot be empty",
     )
+    history: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Prior conversation turns for context in [{role, content}] format",
+    )
     system: Optional[str] = Field(
         default=None, description="Optional system instruction"
     )
@@ -45,6 +49,9 @@ class StreamChunk(BaseModel):
         default=None, description="Thinking/reasoning token fragment"
     )
     done: bool = Field(default=False, description="Whether generation has finished")
+    status: Optional[str] = Field(
+        default=None, description="Current stream lifecycle status e.g. loading_model, streaming, error"
+    )
     eval_count: Optional[int] = Field(
         default=None, description="Total tokens evaluated"
     )

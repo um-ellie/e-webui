@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: e-webui Backend API Contract (Refined)
+  version: 1.1.0
+  description: FastAPI REST and SSE endpoints with multi-turn history and structured error chunks
+paths:
+  /api/health:
+    get:
+      summary: Liveness and upstream connection status
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Health state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/models:
+    get:
+      summary: List available Ollama models with parameter details
+      operationId: listModels
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListResponse'
+        '503':
+          description: Ollama service unreachable
+
+  /api/generate:
+    post:
+      summary: Stream model inference tokens via SSE with context history
+      operationId: generateResponse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptRequest'
+      responses:
+        '200':
+          description: Server-Sent Events stream of StreamChunk JSON items
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, ollama_connected, ollama_url]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        ollama_connected:
+          type: boolean
+        ollama_url:
+          type: string
+
+    HistoryMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+
+    PromptRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryMessage'
+          default: []
+        system:
+          type: string
+          nullable: true
+        stream:
+          type: boolean
+          default: true
+        thinking:
+          type: boolean
+          default: true
+        temperature:
+          type: number
+          default: 0.7
+
+    StreamChunk:
+      type: object
+      required: [token, done]
+      properties:
+        token:
+          type: string
+        thinking:
+          type: string
+          nullable: true
+        done:
+          type: boolean
+        status:
+          type: string
+          enum: [loading_model, streaming, completed, error]
+        eval_count:
+          type: integer
+          nullable: true
+        total_duration:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true

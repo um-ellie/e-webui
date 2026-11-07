@@ -1,7 +1,6 @@
 /**
  * EmptyState Greeting Component
- * Computes time-of-day greetings ("Good evening, Ellie"), renders brand mark (>E_),
- * and handles clickable prompt suggestion chips.
+ * Computes time-of-day greetings ("Good evening, Ellie") and renders brand mark (>E_).
  */
 
 import { store } from '../store.js';
@@ -10,21 +9,12 @@ export class EmptyState {
   constructor(container) {
     this.container = container;
     this.greetingElement = container.querySelector('.empty-greeting');
-    this.chipsContainer = container.querySelector('.suggestion-chips-grid');
-
-    this.defaultPrompts = [
-      'Explain Incus container networking',
-      'Write a Python script for live Ollama streaming',
-      'Compare local LLM quantization formats (Q4 vs Q8)',
-      'Summarize system logs from journalctl'
-    ];
 
     this.init();
   }
 
   init() {
     this.updateGreeting();
-    this.renderChips();
 
     store.on('session:active-changed', (session) => this.updateVisibility(session));
     store.on('message:appended', () => {
@@ -50,22 +40,6 @@ export class EmptyState {
   updateGreeting() {
     if (this.greetingElement) {
       this.greetingElement.textContent = this.getTimeGreeting();
-    }
-  }
-
-  renderChips() {
-    if (!this.chipsContainer) return;
-    this.chipsContainer.innerHTML = '';
-
-    for (const promptText of this.defaultPrompts) {
-      const chip = document.createElement('button');
-      chip.className = 'suggestion-chip';
-      chip.type = 'button';
-      chip.textContent = promptText;
-      chip.addEventListener('click', () => {
-        store.emit('composer:set-prompt', { prompt: promptText });
-      });
-      this.chipsContainer.appendChild(chip);
     }
   }
 
