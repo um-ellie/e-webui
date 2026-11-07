@@ -200,9 +200,12 @@ def handle_cli():
 
         if "curl" in full_cmd:
             fail_flag = state_dir / "fail_model_download"
+            sim_404_flag = state_dir / "simulate_v1_404"
             is_model_dl = "kokoro" in full_cmd or "huggingface" in full_cmd or "voices" in full_cmd or "192.0.2.1" in full_cmd
             if is_model_dl and (fail_flag.exists() or "192.0.2.1" in full_cmd or os.environ.get("FAIL_MODEL_DOWNLOAD") == "1"):
                 sys.exit(7)
+            if (sim_404_flag.exists() or os.environ.get("SIMULATE_V1_404") == "1") and "kokoro-v1_0.pth" in full_cmd:
+                sys.exit(22)
             if "%{http_code}" in full_cmd:
                 print("200")
                 sys.exit(0)
@@ -217,7 +220,7 @@ def handle_cli():
                     out_path_str = map_path(tokens[idx + 1])
                     out_file = Path(out_path_str)
                     out_file.parent.mkdir(parents=True, exist_ok=True)
-                    if "kokoro-v0_19.pth" in str(out_file):
+                    if "kokoro-v0_19.pth" in str(out_file) or "kokoro-v1_0.pth" in str(out_file):
                         with open(out_file, "wb") as f:
                             f.seek(327000000 - 1)
                             f.write(b"\0")

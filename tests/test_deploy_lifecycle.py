@@ -587,6 +587,7 @@ class TestDeployLifecycle(unittest.TestCase):
         self.assertTrue((app_dir / "interpreters" / "python-3.11" / "bin" / "python3").exists())
 
         # Check model weights and voices directory
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth").exists())
         self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth").exists())
         self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "voices").exists())
 
@@ -703,7 +704,8 @@ class TestDeployLifecycle(unittest.TestCase):
 
         c_root = self.mock_state.containers_dir / "e-webui-app"
         app_dir = c_root / "opt" / "e-webui"
-        model_file = app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth"
+        model_file = app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth"
+        legacy_file = app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth"
 
         # 1. Install with --skip-model-download
         res = subprocess.run(
@@ -715,6 +717,7 @@ class TestDeployLifecycle(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Install with --skip-model-download failed: {res.stderr}\n{res.stdout}")
         self.assertIn("skipping kokoro model weights download", res.stdout.lower())
         self.assertFalse(model_file.exists())
+        self.assertFalse(legacy_file.exists())
 
         # 2. Run standalone --download-model
         res_dl = subprocess.run(
@@ -725,6 +728,7 @@ class TestDeployLifecycle(unittest.TestCase):
         )
         self.assertEqual(res_dl.returncode, 0, f"Standalone --download-model failed: {res_dl.stderr}\n{res_dl.stdout}")
         self.assertTrue(model_file.exists())
+        self.assertTrue(legacy_file.exists())
 
         # 3. Running a second time is idempotent
         res_idempotent = subprocess.run(
@@ -767,9 +771,10 @@ class TestDeployLifecycle(unittest.TestCase):
         # 3. Simulate missing model weights and missing audio packages
         c_root = self.mock_state.containers_dir / "e-webui-app"
         app_dir = c_root / "opt" / "e-webui"
-        model_file = app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth"
-        if model_file.exists():
-            model_file.unlink()
+        for fname in ["kokoro-v1_0.pth", "kokoro-v0_19.pth"]:
+            fpath = app_dir / "shared" / "models" / "kokoro" / fname
+            if fpath.is_symlink() or fpath.exists():
+                fpath.unlink()
 
         # Mark audio packages as missing in mock state
         (self.state_dir / "e-webui-app_missing_audio_pkgs").write_text("1")
@@ -794,7 +799,32 @@ class TestDeployLifecycle(unittest.TestCase):
         self.assertIn("repair succeeded", res_repair.stdout.lower())
 
         # Verify model weights are restored
-        self.assertTrue(model_file.exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth").exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth").exists())
+
+    def test_model_download_fallback_to_v019(self):
+        """Verify download falls back to v0.19 if kokoro-v1_0.pth returns 404."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.4.0", release_id="20261107-140000-f1e2d3c4")
+
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+
+        # Simulate 404 for kokoro-v1_0.pth
+        (self.state_dir / "simulate_v1_404").write_text("1")
+
+        res = subprocess.run(
+            ["bash", str(deploy_sh), "--install", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0, f"Install with fallback failed: {res.stderr}\n{res.stdout}")
+        self.assertIn("fallback to v0.19", res.stdout.lower())
+
+        # Both files should exist (one being a symlink to the other)
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth").exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth").exists())
 
 
 if __name__ == "__main__":

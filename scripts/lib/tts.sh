@@ -3,7 +3,7 @@
 set -euo pipefail
 
 KOKORO_MODEL_REL_PATH="shared/models/kokoro"
-KOKORO_WEIGHTS_FILE="kokoro-v0_19.pth"
+KOKORO_WEIGHTS_FILE="kokoro-v1_0.pth"
 KOKORO_CONFIG_FILE="config.json"
 KOKORO_MIN_WEIGHTS_SIZE=300000000 # ~300 MB minimum threshold
 
@@ -44,12 +44,17 @@ tts_config_path() {
 kokoro_model_is_present() {
     local c_name="$1"
     local app_dir="${2:-/opt/e-webui}"
-    local weights_file
-    weights_file="$(tts_weights_path "${app_dir}")"
+    local model_dir
+    model_dir="$(tts_model_dir "${app_dir}")"
     local voices_dir
     voices_dir="$(tts_voices_dir "${app_dir}")"
 
-    if ! container_test_file "${c_name}" "${weights_file}"; then
+    local weights_file=""
+    if container_test_file "${c_name}" "${model_dir}/kokoro-v1_0.pth"; then
+        weights_file="${model_dir}/kokoro-v1_0.pth"
+    elif container_test_file "${c_name}" "${model_dir}/kokoro-v0_19.pth"; then
+        weights_file="${model_dir}/kokoro-v0_19.pth"
+    else
         return 1
     fi
 
@@ -130,8 +135,8 @@ download_kokoro_model() {
     model_dir="$(tts_model_dir "${app_dir}")"
     local voices_dir
     voices_dir="$(tts_voices_dir "${app_dir}")"
-    local weights_file
-    weights_file="$(tts_weights_path "${app_dir}")"
+    local v1_weights="${model_dir}/kokoro-v1_0.pth"
+    local v019_weights="${model_dir}/kokoro-v0_19.pth"
     local config_file
     config_file="$(tts_config_path "${app_dir}")"
 
@@ -143,10 +148,26 @@ download_kokoro_model() {
     info "Setting up Kokoro-82M persistent storage at ${model_dir}..."
     run_in_container "${c_name}" mkdir -p "${model_dir}" "${voices_dir}"
 
-    info "1/3 Downloading Kokoro-82M model weights (${KOKORO_WEIGHTS_FILE})..."
-    local weights_url="${repo_url}/${KOKORO_WEIGHTS_FILE}"
-    if ! download_file_to_container "${c_name}" "${weights_url}" "${weights_file}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
-        error "Failed to download model weights from ${weights_url}."
+    info "1/3 Downloading Kokoro-82M model weights (kokoro-v1_0.pth)..."
+    local weights_url="${repo_url}/kokoro-v1_0.pth"
+    local download_success=0
+
+    if download_file_to_container "${c_name}" "${weights_url}" "${v1_weights}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
+        download_success=1
+        # Maintain backward compatibility for tools/references expecting kokoro-v0_19.pth
+        run_in_container "${c_name}" ln -sfn kokoro-v1_0.pth "${v019_weights}" || true
+    else
+        warn "Direct download of kokoro-v1_0.pth failed. Attempting fallback to v0.19 release..."
+        local fallback_url="${hf_base}/hexgrad/Kokoro-82M/resolve/v0.19/kokoro-v0_19.pth"
+        if download_file_to_container "${c_name}" "${fallback_url}" "${v019_weights}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
+            download_success=1
+            # Maintain forward compatibility symlink for kokoro-v1_0.pth
+            run_in_container "${c_name}" ln -sfn kokoro-v0_19.pth "${v1_weights}" || true
+        fi
+    fi
+
+    if [ "${download_success}" -ne 1 ]; then
+        error "Failed to download model weights from ${weights_url} and fallback ${hf_base}/hexgrad/Kokoro-82M/resolve/v0.19/kokoro-v0_19.pth."
         return 1
     fi
 

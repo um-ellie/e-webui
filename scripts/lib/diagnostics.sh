@@ -100,9 +100,13 @@ run_status_cli() {
 
     # 4. Kokoro-82M Weights & Voices
     if [ "$(type -t kokoro_model_is_present || true)" = "function" ] && kokoro_model_is_present "${c_name}" "${app_dir}"; then
+        local w_file="${app_dir}/shared/models/kokoro/kokoro-v1_0.pth"
+        if ! container_test_file "${c_name}" "${w_file}"; then
+            w_file="${app_dir}/shared/models/kokoro/kokoro-v0_19.pth"
+        fi
         local w_size
-        w_size=$(run_in_container "${c_name}" wc -c "${app_dir}/shared/models/kokoro/kokoro-v0_19.pth" 2>/dev/null | awk '{print int($1/1000000)}' || echo "327")
-        printf "  Kokoro-82M Weights:    %bPRESENT (/opt/e-webui/shared/models/kokoro/kokoro-v0_19.pth, ~%sMB)%b\n" "${C_GREEN}" "${w_size}" "${C_RESET}"
+        w_size=$(run_in_container "${c_name}" wc -c "${w_file}" 2>/dev/null | awk '{print int($1/1000000)}' || echo "327")
+        printf "  Kokoro-82M Weights:    %bPRESENT (%s, ~%sMB)%b\n" "${C_GREEN}" "${w_file}" "${w_size}" "${C_RESET}"
         local v_count
         v_count=$(run_in_container "${c_name}" ls -1 "${app_dir}/shared/models/kokoro/voices" 2>/dev/null | wc -l || echo "0")
         echo "  Voices Available:      ${v_count//[[:space:]]/} voice profiles loaded"
