@@ -12,6 +12,7 @@ import { Composer } from './components/composer.js';
 import { EmptyState } from './components/empty.js';
 import { SettingsDialog } from './components/settings.js';
 import { setupKeyboardShortcuts } from './shortcuts.js';
+import { ttsController } from './tts.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize Settings Dialog
@@ -53,4 +54,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (store.listSessions().length === 0) {
     store.createSession();
   }
+
+  // 10. Stop speech playback on session change or deletion
+  store.on('session:active-changed', () => {
+    ttsController.stop();
+  });
+  store.on('session:deleted', () => {
+    ttsController.stop();
+  });
 });

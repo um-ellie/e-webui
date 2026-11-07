@@ -924,6 +924,36 @@ button:disabled, input:disabled, select:disabled {
   color: var(--mute);
 }
 
+/* TTS Read Aloud Speaker Button */
+.btn-tts {
+  position: relative;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.btn-tts.playing {
+  color: var(--purple);
+  background: var(--active);
+}
+
+.btn-tts.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.btn-tts.loading svg {
+  animation: tts-pulse 1s ease-in-out infinite;
+}
+
+@keyframes tts-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.6; }
+}
+
+.btn-tts.error-hint {
+  color: var(--danger);
+}
+
 /* Scroll To Latest floating button */
 .scroll-latest-btn {
   position: absolute;

@@ -92,3 +92,19 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     ollama_connected: bool = False
     ollama_url: str
+
+
+class TTSRequest(BaseModel):
+    """Incoming request payload for speech synthesis."""
+
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=3000,
+        description="Assistant reply text to read aloud (max 3,000 characters).",
+    )
+    message_id: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="Optional client message ID for request tracking.",
+    )
