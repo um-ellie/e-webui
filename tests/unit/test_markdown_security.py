@@ -66,6 +66,43 @@ class TestMarkdownSecurity(unittest.TestCase):
         )
         self.assertIn("PASS", res.stdout)
 
+    def test_render_markdown_compatibility_with_bundled_marked(self):
+        """Verifies that renderMarkdown does not crash when window.marked has no Renderer constructor."""
+        node_bin = shutil.which("node")
+        if not node_bin:
+            self.skipTest("node binary not found on system")
+
+        markdown_js = REPO_ROOT / "app" / "static" / "js" / "markdown.js"
+        self.assertTrue(markdown_js.exists(), f"markdown.js not found at {markdown_js}")
+
+        script = f"""
+        const marked = (await import({repr(str(MARKED_JS))})).default;
+        const {{ renderMarkdown }} = await import({repr(str(markdown_js))});
+
+        global.window = {{
+            marked: marked
+        }};
+
+        const result = renderMarkdown('Hello **world**\\n\\n```python\\nprint(123)\\n```');
+        if (!result.includes('<strong>world</strong>')) {{
+            console.error('Failed to parse bold text');
+            process.exit(1);
+        }}
+        if (!result.includes('language-python') && !result.includes('python')) {{
+            console.error('Failed to parse code block');
+            process.exit(1);
+        }}
+        console.log('PASS');
+        """
+
+        res = subprocess.run([node_bin, "--input-type=module", "-e", script], capture_output=True, text=True)
+        self.assertEqual(
+            res.returncode,
+            0,
+            f"renderMarkdown test failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}",
+        )
+        self.assertIn("PASS", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

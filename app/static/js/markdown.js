@@ -5,7 +5,7 @@
 
 // Configure marked with custom renderer if available
 function getMarkedRenderer() {
-  if (typeof window.marked === 'undefined') {
+  if (typeof window.marked === 'undefined' || typeof window.marked.Renderer !== 'function') {
     return null;
   }
 
@@ -84,15 +84,17 @@ export function renderMarkdown(text) {
   if (!content) return '';
 
   let rawHtml = '';
-  if (typeof window.marked !== 'undefined') {
+  if (typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
     const renderer = getMarkedRenderer();
-    rawHtml = window.marked.parse(content, { renderer, breaks: true, gfm: true });
+    rawHtml = renderer
+      ? window.marked.parse(content, { renderer, breaks: true, gfm: true })
+      : window.marked.parse(content);
   } else {
     rawHtml = `<p>${escapeHtml(content)}</p>`;
   }
 
   // Sanitize with DOMPurify
-  if (typeof window.DOMPurify !== 'undefined') {
+  if (typeof window.DOMPurify !== 'undefined' && typeof window.DOMPurify.sanitize === 'function') {
     return window.DOMPurify.sanitize(rawHtml, {
       FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
@@ -107,12 +109,12 @@ export function renderMarkdown(text) {
  * @param {HTMLElement} container
  */
 export function attachCodeCopyHandlers(container) {
-  const copyButtons = container.querySelectorAll('.btn-code-copy:not([data-copy-bound])');
+  const copyButtons = container.querySelectorAll('.btn-code-copy:not([data-copy-bound]), .copy-code-btn:not([data-copy-bound])');
   copyButtons.forEach((btn) => {
     btn.setAttribute('data-copy-bound', 'true');
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
-      const codeContainer = btn.closest('.code-container');
+      const codeContainer = btn.closest('.code-container') || btn.closest('.code-block-wrapper');
       if (!codeContainer) return;
 
       const codeElement = codeContainer.querySelector('code');
