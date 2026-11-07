@@ -56,6 +56,18 @@ class MockIncusState:
             shutil.rmtree(c_root)
 
 
+MOCK_PY311_WRAPPER = """#!/usr/bin/env python3
+import sys
+if "-V" in sys.argv or "--version" in sys.argv:
+    print("Python 3.11.9")
+    sys.exit(0)
+if len(sys.argv) > 2 and sys.argv[1] == "-c":
+    code = sys.argv[2]
+    sys.version_info = (3, 11, 9, "final", 0)
+    exec(code)
+    sys.exit(0)
+"""
+
 def create_mock_cli_script(mock_state_dir: Path) -> Path:
     """Generates an executable mock incus bash script pointing to state directory."""
     script_path = mock_state_dir / "mock_incus"
@@ -130,6 +142,8 @@ def handle_cli():
         c_root.mkdir(parents=True, exist_ok=True)
 
         def map_path(s: str) -> str:
+            if str(c_root) in s:
+                return s
             return s.replace("/opt/e-webui", str(c_root / "opt" / "e-webui"))
 
         cmd_args = [map_path(a) for a in cmd_args]
@@ -144,10 +158,22 @@ def handle_cli():
             path_part.mkdir(parents=True, exist_ok=True)
             sys.exit(0)
 
-        if "python3 -m venv" in full_cmd:
+        if "dpkg -s" in full_cmd:
+            pkg_flag = state_dir / f"{name}_missing_audio_pkgs"
+            if pkg_flag.exists():
+                sys.exit(1)
+            sys.exit(0)
+
+        if "apt-get install" in full_cmd:
+            pkg_flag = state_dir / f"{name}_missing_audio_pkgs"
+            if pkg_flag.exists():
+                pkg_flag.unlink(missing_ok=True)
+            sys.exit(0)
+
+        if "-m venv" in full_cmd:
             target_venv = Path(cmd_args[-1])
             (target_venv / "bin").mkdir(parents=True, exist_ok=True)
-            (target_venv / "bin" / "python3").write_text("#!/bin/sh\n")
+            (target_venv / "bin" / "python3").write_text(MOCK_PY311_WRAPPER)
             (target_venv / "bin" / "uvicorn").write_text("#!/bin/sh\n")
             (target_venv / "bin" / "pip").write_text("#!/bin/sh\n")
             (target_venv / "bin" / "python3").chmod(0o755)
@@ -173,12 +199,49 @@ def handle_cli():
             sys.exit(0)
 
         if "curl" in full_cmd:
+            fail_flag = state_dir / "fail_model_download"
+            is_model_dl = "kokoro" in full_cmd or "huggingface" in full_cmd or "voices" in full_cmd or "192.0.2.1" in full_cmd
+            if is_model_dl and (fail_flag.exists() or "192.0.2.1" in full_cmd or os.environ.get("FAIL_MODEL_DOWNLOAD") == "1"):
+                sys.exit(7)
             if "%{http_code}" in full_cmd:
                 print("200")
+                sys.exit(0)
+            import shlex
+            try:
+                tokens = shlex.split(full_cmd)
+            except Exception:
+                tokens = full_cmd.split()
+            if "-o" in tokens:
+                idx = tokens.index("-o")
+                if idx + 1 < len(tokens):
+                    out_path_str = map_path(tokens[idx + 1])
+                    out_file = Path(out_path_str)
+                    out_file.parent.mkdir(parents=True, exist_ok=True)
+                    if "kokoro-v0_19.pth" in str(out_file):
+                        with open(out_file, "wb") as f:
+                            f.seek(327000000 - 1)
+                            f.write(b"\0")
+                    elif "python-3.11" in str(out_file) or "python-standalone" in str(out_file):
+                        import tarfile, io
+                        bio = io.BytesIO()
+                        with tarfile.open(fileobj=bio, mode="w:gz") as tar:
+                            p_bytes = MOCK_PY311_WRAPPER.encode("utf-8")
+                            p_info = tarfile.TarInfo(name="python/bin/python3")
+                            p_info.size = len(p_bytes)
+                            p_info.mode = 0o755
+                            tar.addfile(p_info, io.BytesIO(p_bytes))
+                        out_file.write_bytes(bio.getvalue())
+                    elif ".pt" in str(out_file):
+                        out_file.write_bytes(b"mock voice embedding")
+                    elif "config.json" in str(out_file):
+                        out_file.write_text('{"hidden_size": 768}')
+                    else:
+                        out_file.write_text("mock content")
+                sys.exit(0)
             sys.exit(0)
 
         # Run within simulated root
-        if cmd_args and cmd_args[0] in ("python3", "python", "bash", "sh"):
+        if cmd_args and (cmd_args[0] in ("python3", "python", "bash", "sh") or cmd_args[0].endswith("python3") or cmd_args[0].endswith("python")):
             res = subprocess.run(cmd_args, cwd=str(c_root))
         else:
             res = subprocess.run(full_cmd, shell=True, cwd=str(c_root))

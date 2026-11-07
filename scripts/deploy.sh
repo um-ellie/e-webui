@@ -22,6 +22,7 @@ if [ -f "${LIB_DIR}/detect.sh" ]; then source "${LIB_DIR}/detect.sh"; fi
 if [ -f "${LIB_DIR}/provision.sh" ]; then source "${LIB_DIR}/provision.sh"; fi
 if [ -f "${LIB_DIR}/migrate.sh" ]; then source "${LIB_DIR}/migrate.sh"; fi
 if [ -f "${LIB_DIR}/uninstall.sh" ]; then source "${LIB_DIR}/uninstall.sh"; fi
+if [ -f "${LIB_DIR}/tts.sh" ]; then source "${LIB_DIR}/tts.sh"; fi
 if [ -f "${LIB_DIR}/diagnostics.sh" ]; then source "${LIB_DIR}/diagnostics.sh"; fi
 
 # Defaults
@@ -35,6 +36,7 @@ RETENTION_COUNT=3
 PURGE_DATA=0
 OPERATION="auto"
 RELEASE_PATH=""
+SKIP_MODEL_DOWNLOAD=0
 
 show_help() {
     cat <<EOF
@@ -46,14 +48,20 @@ Operations:
   (no operation)       Automatically detect whether to install or update
   --install            Perform initial container provisioning and installation
   --update             Update existing deployment using zero-rebuild release switch
+  --download-model     Download/verify Kokoro-82M model weights into shared persistent storage
   --rollback           Restore previous healthy release
-  --status             Display container, release, service, and health status
-  --repair             Audit and repair broken symlinks, venvs, and service units
+  --status             Display container, release, service, Python runtime, and TTS health
+  --repair             Audit and repair broken symlinks, venvs, service units, and TTS assets
   --uninstall          Remove services and configuration (preserves shared data by default)
   -h, --help           Show this help message and exit
 
 Options:
   --release <PATH>     Path to release package directory or .tar.gz bundle (default: latest in dist/releases)
+  --skip-model-download
+                       Bypass Kokoro-82M model weights download during install or update
+  --proxy <URL>        Proxy server URL for HTTP, HTTPS, and SOCKS connections
+  --hf-endpoint <URL>  Custom Hugging Face mirror URL for model weights (default: https://huggingface.co)
+  --pip-index <URL>    Custom PyPI repository mirror URL
   -p, --port <PORT>    Host port to bind for Web UI proxy (default: 8080)
   -o, --ollama-url <URL>
                        Explicit Ollama host address for proxy (default: 127.0.0.1:11434)
@@ -62,6 +70,15 @@ Options:
   -r, --reset          Reset saved deployment state and re-provision from scratch
   --purge-data         Used with --uninstall to remove persistent application data
   --retention <COUNT>  Number of past healthy releases to retain (default: 3)
+
+Environment Variables:
+  HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, NO_PROXY
+                       Configures network proxy for all container downloads
+  HF_ENDPOINT          Hugging Face mirror endpoint (e.g. https://hf-mirror.com)
+  PIP_INDEX_URL        PyPI index URL
+  PIP_EXTRA_INDEX_URL  Additional pip wheel index (default: https://download.pytorch.org/whl/cpu)
+  PYTHON_STANDALONE_URL
+                       Custom URL for prebuilt standalone Python 3.11 distribution archive
 
 Exit Codes:
   0    Success
@@ -109,6 +126,14 @@ while [ $# -gt 0 ]; do
             OPERATION="repair"
             shift
             ;;
+        --download-model)
+            OPERATION="download-model"
+            shift
+            ;;
+        --skip-model-download)
+            SKIP_MODEL_DOWNLOAD=1
+            shift
+            ;;
         --uninstall)
             OPERATION="uninstall"
             shift
@@ -131,6 +156,35 @@ while [ $# -gt 0 ]; do
                 shift 2
             else
                 error "Option --port requires a numerical port."
+                exit 2
+            fi
+            ;;
+        --proxy)
+            if [ -n "${2:-}" ]; then
+                export HTTP_PROXY="$2"
+                export HTTPS_PROXY="$2"
+                export ALL_PROXY="$2"
+                shift 2
+            else
+                error "Option --proxy requires a URL."
+                exit 2
+            fi
+            ;;
+        --hf-endpoint)
+            if [ -n "${2:-}" ]; then
+                export HF_ENDPOINT="$2"
+                shift 2
+            else
+                error "Option --hf-endpoint requires a URL."
+                exit 2
+            fi
+            ;;
+        --pip-index)
+            if [ -n "${2:-}" ]; then
+                export PIP_INDEX_URL="$2"
+                shift 2
+            else
+                error "Option --pip-index requires a URL."
                 exit 2
             fi
             ;;
@@ -244,6 +298,17 @@ run_update() {
     active_rel=$(state_get_active_release "${CONTAINER_NAME}" "${APP_DIR}")
     info "Currently active release: ${active_rel:-none}"
 
+    # Ensure system prerequisites and directories (espeak-ng, interpreters, models) are satisfied
+    install_system_prerequisites "${CONTAINER_NAME}"
+    setup_deployment_directories "${CONTAINER_NAME}" "${APP_DIR}"
+
+    # Check for incompatible Python interpreter in existing active venv
+    if container_test_file "${CONTAINER_NAME}" "${APP_DIR}/current/venv/bin/python3"; then
+        if ! is_compatible_python_binary "${CONTAINER_NAME}" "${APP_DIR}/current/venv/bin/python3"; then
+            info "Active release uses an incompatible Python interpreter. Automatically migrating to compatible Python 3.11 runtime..."
+        fi
+    fi
+
     # Transfer release to container staging
     prepare_release_staging "${CONTAINER_NAME}" "${APP_DIR}"
     local container_staging="${APP_DIR}/staging/release-${release_id}"
@@ -266,6 +331,16 @@ run_update() {
     # Link dependencies and data
     link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}"
 
+    # Ensure Kokoro TTS Model Weights (non-blocking)
+    if [ "${SKIP_MODEL_DOWNLOAD:-0}" -eq 1 ]; then
+        info "Skipping Kokoro model weights download as requested (--skip-model-download)."
+    else
+        ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+    fi
+
+    # Update systemd unit and environment configuration with offline settings
+    install_service_unit "${CONTAINER_NAME}" "${APP_DIR}" "${HOST_PORT}" "http://${OLLAMA_TARGET}"
+
     # Atomically switch current release pointer
     atomic_switch_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}"
 
@@ -276,6 +351,11 @@ run_update() {
     # Health check
     if verify_http_health "${CONTAINER_NAME}" "${HOST_PORT}" 15 2; then
         state_commit_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${HOST_PORT}" "${OLLAMA_TARGET}" "${app_version}" "${git_commit}"
+        local tts_present=false
+        if kokoro_model_is_present "${CONTAINER_NAME}" "${APP_DIR}"; then
+            tts_present=true
+        fi
+        state_update_tts_environment "${CONTAINER_NAME}" "${APP_DIR}" "3.11" "true" "${tts_present}" "${APP_DIR}/shared/models/kokoro"
         prune_old_releases "${CONTAINER_NAME}" "${APP_DIR}" "${RETENTION_COUNT}"
         success "Release '${release_id}' (v${app_version}) successfully deployed and verified healthy!"
         return 0
@@ -358,6 +438,13 @@ run_install() {
     # Step 7: Link Dependencies & Data
     link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}"
 
+    # Step 7b: Ensure Kokoro TTS Model Weights (non-blocking)
+    if [ "${SKIP_MODEL_DOWNLOAD:-0}" -eq 1 ]; then
+        info "Skipping Kokoro model weights download as requested (--skip-model-download)."
+    else
+        ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+    fi
+
     # Step 8: Configure and Install Systemd Service
     install_service_unit "${CONTAINER_NAME}" "${APP_DIR}" "${HOST_PORT}" "http://${OLLAMA_TARGET}"
 
@@ -370,6 +457,11 @@ run_install() {
 
     if verify_http_health "${CONTAINER_NAME}" "${HOST_PORT}" 15 2; then
         state_commit_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${HOST_PORT}" "${OLLAMA_TARGET}" "${app_version}" "${git_commit}"
+        local tts_present=false
+        if kokoro_model_is_present "${CONTAINER_NAME}" "${APP_DIR}"; then
+            tts_present=true
+        fi
+        state_update_tts_environment "${CONTAINER_NAME}" "${APP_DIR}" "3.11" "true" "${tts_present}" "${APP_DIR}/shared/models/kokoro"
         success "Initial installation completed successfully! Release '${release_id}' (v${app_version}) is active."
         return 0
     else
@@ -430,6 +522,48 @@ run_auto() {
     esac
 }
 
+# --- Core Workflow: run_download_model ---
+run_download_model() {
+    banner "Kokoro-82M Text-to-Speech Model Asset Acquisition for '${CONTAINER_NAME}'"
+
+    check_incus_installed || exit 2
+    if ! container_exists "${CONTAINER_NAME}"; then
+        error "Target container '${CONTAINER_NAME}' does not exist."
+        exit 2
+    fi
+
+    if ! container_is_running "${CONTAINER_NAME}"; then
+        info "Container '${CONTAINER_NAME}' is stopped. Starting container..."
+        if ! incus_cmd start "${CONTAINER_NAME}"; then
+            error "Failed to start container '${CONTAINER_NAME}'."
+            exit 3
+        fi
+        sleep 2
+    fi
+
+    acquire_lock "${CONTAINER_NAME}" "${APP_DIR}" || exit 2
+
+    info "Auditing Kokoro-82M model storage at ${APP_DIR}/shared/models/kokoro..."
+    setup_deployment_directories "${CONTAINER_NAME}" "${APP_DIR}"
+
+    if kokoro_model_is_present "${CONTAINER_NAME}" "${APP_DIR}"; then
+        success "Kokoro-82M model weights already present and verified in shared storage."
+        exit 0
+    fi
+
+    info "Downloading Kokoro-82M model weights and voice assets..."
+    if download_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}"; then
+        local active_py_ver="3.11"
+        state_update_tts_environment "${CONTAINER_NAME}" "${APP_DIR}" "${active_py_ver}" "true" "true" "${APP_DIR}/shared/models/kokoro"
+        success "Kokoro-82M model weights successfully acquired and ready for offline use."
+        exit 0
+    else
+        error "Model download failed."
+        info "Please check your network connection, proxy, or HF_ENDPOINT mirror settings."
+        exit 3
+    fi
+}
+
 # --- Main Dispatcher ---
 main() {
     case "${OPERATION}" in
@@ -441,6 +575,9 @@ main() {
             ;;
         update)
             run_update
+            ;;
+        download-model)
+            run_download_model
             ;;
         rollback)
             if [ "$(type -t run_rollback_cli || true)" = "function" ]; then
