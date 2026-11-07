@@ -512,6 +512,15 @@ export class Composer {
 
     const modelToUse = session.model || store.defaultModel || (typeof localStorage !== 'undefined' ? localStorage.getItem('ewebui_last_model') : '') || '';
 
+    if (!modelToUse) {
+      showToast('No model selected. Please check that Ollama is running and has models available.');
+      if (this.textarea && !this.textarea.value) {
+        this.textarea.value = promptText;
+        this.updateSendButtonState();
+      }
+      return;
+    }
+
     let history = [];
     if (isRetry) {
       const fullHist = store.getHistory(session.id);

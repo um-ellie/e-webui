@@ -67,6 +67,26 @@ class TestUIContracts(unittest.TestCase):
                     f"Missing disabled reason '{reason}' in features.js for {control_id}"
                 )
 
+    def test_composer_has_model_guard(self):
+        """Verify that composer.js has a guard preventing send with an empty model."""
+        composer_file = WORKSPACE_ROOT / "app/static/js/components/composer.js"
+        self.assertTrue(composer_file.exists(), f"composer.js missing: {composer_file}")
+        with open(composer_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("if (!modelToUse)", content)
+        self.assertIn("No model selected", content)
+
+    def test_chat_error_categorization_handles_422(self):
+        """Verify that chat.js classifies 422 / unprocessable validation errors."""
+        chat_file = WORKSPACE_ROOT / "app/static/js/components/chat.js"
+        self.assertTrue(chat_file.exists(), f"chat.js missing: {chat_file}")
+        with open(chat_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("invalid_model_request", content)
+        self.assertIn("Invalid Model Request", content)
+
 
 if __name__ == "__main__":
     unittest.main()

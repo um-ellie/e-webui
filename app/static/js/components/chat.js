@@ -29,6 +29,14 @@ function categorizeError(err) {
       status: 401
     };
   }
+  if (status === 422 || msg.includes('422') || msg.includes('unprocessable') || msg.includes('value_error')) {
+    return {
+      category: 'invalid_model_request',
+      title: 'Invalid Model Request',
+      desc: 'No valid model was specified or the request parameters were rejected by the server.',
+      status: 422
+    };
+  }
   if (status === 404 || msg.includes('model not found') || msg.includes('not found')) {
     return {
       category: 'model_not_found',

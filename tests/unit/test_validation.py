@@ -50,6 +50,20 @@ class TestPromptRequestValidation(unittest.TestCase):
         with self.assertRaises(ValidationError):
             PromptRequest(model="qwen3.5:4b", prompt="")
 
+    def test_empty_model_validation_rejected(self):
+        """Verify that an empty string for model name fails validation."""
+        try:
+            from pydantic import ValidationError
+            from app.models import PromptRequest
+        except ImportError:
+            self.skipTest("pydantic not installed in current environment")
+
+        with self.assertRaises(ValidationError) as ctx:
+            PromptRequest(model="", prompt="Test question")
+        
+        errors = ctx.exception.errors()
+        self.assertTrue(any(e["loc"] == ("model",) for e in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
