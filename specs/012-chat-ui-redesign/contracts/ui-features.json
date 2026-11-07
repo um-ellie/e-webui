@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UIFeatureRegistryContract",
+  "description": "Registry defining all Claude-style interface controls and their availability status",
+  "type": "object",
+  "patternProperties": {
+    "^[a-z0-9_]+\\.[a-z0-9_]+$": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["enabled", "disabled"]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Explanatory text shown in tooltip when status is disabled"
+        },
+        "shortcut": {
+          "type": "string",
+          "description": "Optional keyboard shortcut string"
+        }
+      }
+    }
+  },
+  "default": {
+    "chat.send": { "status": "enabled", "shortcut": "Enter" },
+    "chat.stop": { "status": "enabled", "shortcut": "Esc" },
+    "chat.model_select": { "status": "enabled" },
+    "chat.theme_toggle": { "status": "enabled" },
+    "chat.font_size": { "status": "enabled" },
+    "chat.think_toggle": { "status": "enabled" },
+    "chat.attach_file": { "status": "disabled", "reason": "File upload is not available yet" },
+    "chat.tools_menu": { "status": "disabled", "reason": "Tools are not available yet" },
+    "chat.export": { "status": "disabled", "reason": "Export is not available yet" },
+    "chat.share": { "status": "disabled", "reason": "Sharing is not available yet" },
+    "session.new": { "status": "enabled", "shortcut": "Ctrl+Shift+O" },
+    "session.search": { "status": "enabled", "shortcut": "Ctrl+K" },
+    "session.rename": { "status": "enabled" },
+    "session.delete": { "status": "enabled" },
+    "session.pin": { "status": "disabled", "reason": "Pinning chats is not available yet" },
+    "nav.sidebar_toggle": { "status": "enabled", "shortcut": "Ctrl+B" },
+    "nav.library": { "status": "disabled", "reason": "Prompt library is not available yet" },
+    "nav.tools": { "status": "disabled", "reason": "Tools catalog is not available yet" },
+    "model.temperature_tune": { "status": "disabled", "reason": "Custom parameters are not available yet" },
+    "model.system_prompt": { "status": "disabled", "reason": "System prompt configuration is not available yet" }
+  }
+}

@@ -1,0 +1,28 @@
+/* e-webui design tokens (reference). Light is default; dark follows the OS; data-theme overrides. */
+:root{
+  --bg:#F6FBFE; --side:#E6F4FB; --card:#FFFFFF; --line:#D3E5F0;
+  --ink:#2A2140; --mute:#625B7E; --user:#E8E0F4; --active:#D5EAF6;
+  --codebg:#EFEAF8; --codehead:#E3DBF1;
+  --rose:#AD3960; --purple:#6A4892; --on-rose:#FFFFFF;
+  --ok:#58B88A;
+  --font-ui:Inter,system-ui,sans-serif;
+  --font-read:"Source Serif 4",Georgia,serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+  --font-fa:Vazirmatn,Inter,system-ui,sans-serif;
+  --radius-s:10px; --radius-m:14px; --radius-l:24px;
+  --blink:1.06s;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#110E20; --side:#17132A; --card:#1E1936; --line:#2E2750;
+    --ink:#ECE7F7; --mute:#A59DC0; --user:#2A2248; --active:#262045;
+    --codebg:#1A1530; --codehead:#241E40;
+    --rose:#E5779B; --purple:#B79DE0; --on-rose:#17132A;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#110E20; --side:#17132A; --card:#1E1936; --line:#2E2750;
+  --ink:#ECE7F7; --mute:#A59DC0; --user:#2A2248; --active:#262045;
+  --codebg:#1A1530; --codehead:#241E40;
+  --rose:#E5779B; --purple:#B79DE0; --on-rose:#17132A;
+}

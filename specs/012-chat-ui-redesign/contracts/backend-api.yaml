@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: e-webui Backend API Contract
+  version: 1.0.0
+  description: Existing FastAPI contracts consumed by the redesigned Claude-style frontend
+paths:
+  /api/health:
+    get:
+      summary: Liveness and upstream connection status
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Health state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/models:
+    get:
+      summary: List available Ollama models
+      operationId: listModels
+      responses:
+        '200':
+          description: List of models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListResponse'
+        '503':
+          description: Ollama service unreachable
+
+  /api/generate:
+    post:
+      summary: Stream model inference tokens via SSE
+      operationId: generateResponse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptRequest'
+      responses:
+        '200':
+          description: Server-Sent Events stream of StreamChunk JSON items
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Lines starting with "data: " containing JSON-serialized StreamChunk
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, ollama_connected, ollama_url]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        ollama_connected:
+          type: boolean
+        ollama_url:
+          type: string
+
+    ModelItem:
+      type: object
+      required: [name, size]
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        parameter_size:
+          type: string
+          nullable: true
+        quantization:
+          type: string
+          nullable: true
+        modified_at:
+          type: string
+          nullable: true
+
+    ModelListResponse:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelItem'
+        default_model:
+          type: string
+          nullable: true
+
+    PromptRequest:
+      type: object
+      required: [model, prompt]
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        system:
+          type: string
+          nullable: true
+        stream:
+          type: boolean
+          default: true
+        thinking:
+          type: boolean
+          default: true
+        temperature:
+          type: number
+          default: 0.7
+
+    StreamChunk:
+      type: object
+      required: [token, done]
+      properties:
+        token:
+          type: string
+        thinking:
+          type: string
+          nullable: true
+        done:
+          type: boolean
+        eval_count:
+          type: integer
+          nullable: true
+        total_duration:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true

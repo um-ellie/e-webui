@@ -1,143 +1,312 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="light">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>e-webui</title>
+  <meta name="description" content="Claude-style chat interface for local Ollama models">
+  <meta name="theme-color" content="#F6FBFE">
+
+  <!-- Favicons and Web App Manifest -->
+  <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
+  <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+  <link rel="manifest" href="/static/img/site.webmanifest">
+
+  <!-- Local Self-Hosted Stylesheet -->
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%2232%22%20height=%2232%22><text y=%2226%22 font-size=%2226%22>🦙</text></svg>">
+
+  <!-- Local Vendored Libraries -->
+  <script src="/static/vendor/marked.min.js"></script>
+  <script src="/static/vendor/dompurify.min.js"></script>
 </head>
 <body>
-  <div class="app-container">
-    <!-- Top Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <a href="/" class="brand-logo-link" title="e-webui Home">
-          <span class="brand-logo" role="img" aria-label="e-webui" dir="ltr" style="unicode-bidi: isolate;">
-            <span class="logo-prompt">&gt;</span>
-            <span class="logo-text">~/.E</span>
-            <span class="logo-cursor" aria-hidden="true">_</span>
-          </span>
+  <div class="app-layout">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar" aria-label="Chat navigation">
+      <div class="sidebar-header">
+        <a href="/" class="brand-link" aria-label="e-webui home">
+          <svg viewBox="25 21 162 48" role="img" aria-label="Ellie logo" class="logo" height="26">
+            <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
+            <path d="M67 45C67 38.5 71.5 36.5 75 41C78 44.8 81 44 81.2 37" fill="none" stroke="var(--purple)" stroke-width="4.6"/>
+            <path d="M98 29H104.2L92.2 58.6H86Z" fill="var(--purple)"/>
+            <circle cx="116" cy="52.8" r="4.1" fill="var(--purple)"/>
+            <path d="M128 30H144.5V35.2H134V40H143.5V45H134V51H144.5V56H128Z" fill="var(--purple)"/>
+            <rect class="logo-cursor" x="160" y="56.2" width="19" height="4.8" fill="var(--purple)"/>
+          </svg>
         </a>
-        <div id="status-badge" class="status-badge disconnected" title="Checking Ollama connection status...">
-          <span class="status-dot"></span>
-          <span id="status-text" class="status-text">Connecting</span>
+        <button class="btn-icon btn-collapse-sidebar" type="button" aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)">
+          <svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+        </button>
+      </div>
+
+      <div class="sidebar-actions hide-collapsed">
+        <button class="btn-new-chat" type="button" title="Start new conversation (Ctrl+Shift+O)">
+          <svg class="i r" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <span>New chat</span>
+        </button>
+        <div class="search-box">
+          <svg class="i" viewBox="0 0 24 24" style="color:var(--mute);width:16px;height:16px"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input class="search-input" type="search" placeholder="Search chats..." aria-label="Search conversations" />
         </div>
       </div>
 
-      <div class="header-right">
-        <!-- Model Selection -->
-        <div class="model-select-wrapper">
-          <label for="model-select" class="sr-only">Model:</label>
-          <div class="select-icon-wrapper">
-            <svg class="select-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-              <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            </svg>
-            <select id="model-select" class="model-select" disabled title="Select Ollama Model">
-              <option value="">Loading models...</option>
+      <nav class="sidebar-nav hide-collapsed">
+        <a href="#" class="nav-link" aria-current="page">
+          <svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Chats</span>
+        </a>
+        <a href="#" class="nav-link nav-library disabled" aria-disabled="true">
+          <svg class="i" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
+          <span>Library</span>
+        </a>
+        <a href="#" class="nav-link nav-tools disabled" aria-disabled="true">
+          <svg class="i" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span>Tools</span>
+        </a>
+      </nav>
+
+      <!-- Grouped Session List -->
+      <div class="session-list hide-collapsed" role="list" aria-label="Recent chats">
+        <!-- Dynamically rendered by sidebar.js -->
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div class="avatar" aria-hidden="true">E</div>
+        <div class="footer-user-info hide-collapsed">
+          <div class="user-name">Ellie</div>
+          <div class="connection-sub">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="status-text">Connecting</span>
+          </div>
+        </div>
+        <button class="btn-icon btn-open-settings hide-collapsed" type="button" aria-label="Open settings" title="Settings">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Stage -->
+    <main class="main-stage">
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-left">
+          <button class="btn-icon mobile-menu-toggle" type="button" aria-label="Open sidebar">
+            <svg class="i" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="header-chat-title" tabindex="0" role="button" aria-label="Click to rename chat" title="Click to rename">
+            New conversation
+          </div>
+        </div>
+
+        <div class="header-right">
+          <select class="header-model-select pill-dropdown" aria-label="Select model">
+            <option value="">Loading models...</option>
+          </select>
+
+          <button class="btn-icon btn-share" type="button" aria-label="Share conversation">
+            <svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </button>
+
+          <button class="btn-icon btn-header-overflow" type="button" aria-label="More options">
+            <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable Reading Area (720px Column) -->
+      <div class="chat-scroll-area">
+        <div class="reading-column">
+          <!-- Empty State Greeting -->
+          <div class="empty-state">
+            <div class="empty-logo-mark">
+              <svg viewBox="28 28 88 34" role="img" aria-label="Ellie mark" class="mark" height="34">
+                <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
+                <path d="M60 30H76.5V35.2H66V40H75.5V45H66V51H76.5V56H60Z" fill="var(--purple)"/>
+                <rect class="logo-cursor" x="84" y="56.2" width="18" height="4.8" fill="var(--purple)"/>
+              </svg>
+            </div>
+            <h1 class="empty-greeting">Good evening, Ellie</h1>
+            <div class="suggestion-chips-grid">
+              <!-- Dynamically populated by empty.js -->
+            </div>
+          </div>
+
+          <!-- Message Turns Container -->
+          <div class="messages-list" role="log" aria-live="polite">
+            <!-- Dynamically populated by chat.js -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Composer Card Anchor -->
+      <div class="composer-area">
+        <div class="reading-column">
+          <div class="composer-box">
+            <!-- Drag and Drop Overlay -->
+            <div class="drop-overlay" style="display:none">
+              <svg class="i p" style="width:36px;height:36px" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              <div style="font-weight:600;font-size:15px">File upload is not available yet</div>
+              <div style="font-size:12.5px;color:var(--mute)">Attachments will be enabled in a future update</div>
+            </div>
+
+            <!-- Auto-growing Textarea -->
+            <textarea
+              class="composer-textarea"
+              placeholder="How can I help you today?"
+              rows="1"
+              aria-label="Write your message"
+            ></textarea>
+
+            <!-- Accessory Toolbar -->
+            <div class="composer-toolbar">
+              <button class="btn-icon btn-attach" type="button" aria-label="Attach file" style="border:1px solid var(--line);border-radius:999px;width:34px;height:34px">
+                <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+
+              <button class="pill-toggle pill-tools" type="button">
+                <svg class="i" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+                <span>Tools</span>
+              </button>
+
+              <button class="pill-toggle pill-think on" type="button" aria-pressed="true">
+                <svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
+                <span>Think</span>
+              </button>
+
+              <div style="flex:1"></div>
+
+              <span class="composer-model-pill" style="font-size:12px;color:var(--mute);margin-right:8px"></span>
+
+              <button class="btn-send" type="button" aria-label="Send message" title="Send (Enter)">
+                <svg class="i" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="composer-disclaimer">
+            Local models can make mistakes. Check important info.
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Settings Modal Dialog -->
+  <div id="settings-modal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title">
+      <div class="modal-header">
+        <h2 id="settings-dialog-title" class="modal-title">Settings</h2>
+        <button class="btn-icon btn-close-modal" type="button" aria-label="Close dialog">
+          <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <nav class="tabs-nav" aria-label="Settings categories">
+        <button class="tab-btn active" data-tab="general" type="button">General</button>
+        <button class="tab-btn" data-tab="appearance" type="button">Appearance</button>
+        <button class="tab-btn" data-tab="models" type="button">Models</button>
+        <button class="tab-btn" data-tab="shortcuts" type="button">Shortcuts</button>
+        <button class="tab-btn" data-tab="about" type="button">About</button>
+      </nav>
+
+      <div class="modal-body">
+        <!-- General Tab -->
+        <div id="tab-general" class="tab-pane">
+          <div class="settings-group">
+            <label for="setting-language" class="settings-label">Interface Language</label>
+            <select id="setting-language" class="settings-select">
+              <option value="en">English (US)</option>
+              <option value="fa">فارسی (Persian - Prepared)</option>
             </select>
           </div>
         </div>
 
-        <!-- Thinking Mode Toggle -->
-        <button id="thinking-btn" class="toolbar-toggle active" type="button" aria-pressed="true" title="Toggle model reasoning thoughts (Thinking Mode)">
-          <svg class="toolbar-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"></path>
-            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"></path>
-          </svg>
-          <span class="btn-label">Thinking</span>
-          <span class="toggle-pill" aria-hidden="true"></span>
-        </button>
+        <!-- Appearance Tab -->
+        <div id="tab-appearance" class="tab-pane" style="display:none">
+          <div class="settings-group">
+            <label for="setting-theme" class="settings-label">Color Theme</label>
+            <select id="setting-theme" class="settings-select">
+              <option value="system">System (Automatic)</option>
+              <option value="light">Light Mode</option>
+              <option value="dark">Dark Mode</option>
+            </select>
+          </div>
 
-        <!-- Theme Toggle (Light / Dark) -->
-        <button id="theme-btn" class="toolbar-btn icon-only" type="button" aria-label="Toggle light/dark theme" title="Toggle Theme">
-          <svg id="theme-icon-sun" class="toolbar-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-          <svg id="theme-icon-moon" class="toolbar-icon hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
-
-        <!-- Clear Chat Button -->
-        <button id="clear-btn" class="toolbar-btn" type="button" title="Clear conversation history">
-          <svg class="toolbar-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-          <span class="btn-label">Clear</span>
-        </button>
-      </div>
-    </header>
-
-    <!-- Chat Messages Container -->
-    <main id="chat-container" class="chat-container">
-      <div id="empty-state" class="empty-state">
-        <div class="empty-badge" aria-hidden="true">
-          <span class="empty-logo-prompt">&gt;</span>
-          <span class="empty-logo-text">~/.E</span>
-          <span class="empty-logo-cursor">_</span>
+          <div class="settings-group">
+            <label for="setting-font-size" class="settings-label">Interface Font Size</label>
+            <select id="setting-font-size" class="settings-select">
+              <option value="small">Compact (13.5px)</option>
+              <option value="medium">Default (15px)</option>
+              <option value="large">Spacious (16.5px)</option>
+            </select>
+          </div>
         </div>
-        <h2>What can I build or answer for you?</h2>
-        <p>Isolated Ollama models running securely on Incus with real-time streaming.</p>
-        <div class="quick-prompts">
-          <button class="quick-prompt-btn" type="button" data-prompt="Explain the difference between a container and a virtual machine.">
-            <span class="prompt-tag">Architecture</span>
-            <span class="prompt-text">"Explain Containers vs VMs"</span>
-          </button>
-          <button class="quick-prompt-btn" type="button" data-prompt="Write a Python script to check system CPU and memory usage.">
-            <span class="prompt-tag">Python</span>
-            <span class="prompt-text">"Write a Python script for CPU/RAM monitor"</span>
-          </button>
-          <button class="quick-prompt-btn" type="button" data-prompt="Why is the sky blue? Explain simply for a beginner.">
-            <span class="prompt-tag">Science</span>
-            <span class="prompt-text">"Why is the sky blue?"</span>
-          </button>
-        </div>
-      </div>
-      <div id="messages-list" class="messages-list"></div>
-    </main>
 
-    <!-- Input Footer -->
-    <footer class="app-footer">
-      <form id="chat-form" class="chat-form">
-        <div class="input-card">
-          <textarea
-            id="prompt-input"
-            class="prompt-input"
-            rows="1"
-            placeholder="Type your message... (Shift+Enter for new line)"
-            required
-            aria-label="Message prompt"
-          ></textarea>
-          <button type="submit" id="send-btn" class="send-btn" title="Send message" aria-label="Send message">
-            <svg id="send-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        <!-- Models Tab -->
+        <div id="tab-models" class="tab-pane" style="display:none">
+          <div class="settings-group">
+            <label for="setting-temperature" class="settings-label">Temperature</label>
+            <input id="setting-temperature" class="settings-select disabled" type="number" value="0.7" step="0.1" disabled>
+          </div>
+          <div class="settings-group">
+            <label for="setting-system-prompt" class="settings-label">System Prompt</label>
+            <textarea id="setting-system-prompt" class="settings-select disabled" rows="3" disabled placeholder="Custom system instructions not available yet"></textarea>
+          </div>
+        </div>
+
+        <!-- Shortcuts Tab -->
+        <div id="tab-shortcuts" class="tab-pane" style="display:none">
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <tbody>
+              <tr style="border-bottom:1px solid var(--line);height:36px">
+                <td><strong>Search chats</strong></td>
+                <td style="text-align:right"><kbd>Ctrl</kbd> + <kbd>K</kbd></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--line);height:36px">
+                <td><strong>New chat</strong></td>
+                <td style="text-align:right"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--line);height:36px">
+                <td><strong>Toggle sidebar</strong></td>
+                <td style="text-align:right"><kbd>Ctrl</kbd> + <kbd>B</kbd></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--line);height:36px">
+                <td><strong>Focus composer</strong></td>
+                <td style="text-align:right"><kbd>/</kbd></td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--line);height:36px">
+                <td><strong>Stop generation / Close modal</strong></td>
+                <td style="text-align:right"><kbd>Esc</kbd></td>
+              </tr>
+              <tr style="height:36px">
+                <td><strong>Keyboard shortcuts</strong></td>
+                <td style="text-align:right"><kbd>?</kbd></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- About Tab -->
+        <div id="tab-about" class="tab-pane" style="display:none">
+          <div style="text-align:center;padding:12px 0">
+            <svg viewBox="28 28 88 34" role="img" aria-label="Ellie mark" class="mark" height="40">
+              <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
+              <path d="M60 30H76.5V35.2H66V40H75.5V45H66V51H76.5V56H60Z" fill="var(--purple)"/>
+              <rect class="logo-cursor" x="84" y="56.2" width="18" height="4.8" fill="var(--purple)"/>
             </svg>
-            <svg id="stop-icon" class="hidden" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="5" y="5" width="14" height="14" rx="2"></rect>
-            </svg>
-          </button>
+            <h3 style="margin-top:12px">e-webui</h3>
+            <p style="color:var(--mute);font-size:13.5px;margin-top:4px">Version 1.0.0 (Claude-Style Appearance Phase)</p>
+            <p style="color:var(--mute);font-size:12.5px;margin-top:12px">A calm, modern web interface for local Ollama models on Incus.</p>
+          </div>
         </div>
-        <div class="footer-meta">
-          <span>Local &amp; isolated • Zero telemetry • Incus container backend</span>
-        </div>
-      </form>
-    </footer>
+      </div>
+    </div>
   </div>
 
-  <script src="/static/vendor/marked.min.js"></script>
-  <script src="/static/app.js"></script>
+  <!-- Application Modular Scripts -->
+  <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,16 @@
+/* Ellie logo: color tokens (sampled from the original logo) */
+:root {
+  --logo-rose:   #AD3960;  /* ">"            */
+  --logo-purple: #6A4892;  /* "~/.E_"        */
+  --paper:       #E6F4FB;  /* light pastel background */
+  --ink-dark:    #17132A;  /* dark background */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --logo-rose:   #E5779B;  /* lighter pastel rose for dark backgrounds   */
+    --logo-purple: #B79DE0;  /* lighter pastel purple for dark backgrounds */
+  }
+}
+/* Manual theme toggle: set data-theme="dark" on <html> and mirror the dark values */
+:root[data-theme="dark"] { --logo-rose: #E5779B; --logo-purple: #B79DE0; }
+:root[data-theme="light"] { --logo-rose: #AD3960; --logo-purple: #6A4892; }
