@@ -76,9 +76,10 @@ class TestTTSService(unittest.TestCase):
             with self.assertRaises(ValueError):
                 service._synthesize_sync("```python\nprint(1)\n```")
 
-    def test_synthesize_success_packs_wav(self):
+    def test_synthesize_success_packs_wav_with_local_voice_file(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
 
         fake_audio = [0.1, 0.2, 0.3]
 
@@ -109,8 +110,73 @@ class TestTTSService(unittest.TestCase):
             audio_bytes = asyncio.run(service.synthesize("Hello, this is a test."))
             self.assertEqual(audio_bytes, b"RIFF_FAKE_WAV_BYTES")
             mock_pipeline_inst.assert_called_once()
-            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], "af_heart")
+            # Local voice file ending in .pt must be used so Hugging Face download is bypassed
+            expected_voice = str(self.model_path / "voices" / "af_heart.pt")
+            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], expected_voice)
             self.assertEqual(mock_pipeline_inst.call_args[1]["speed"], 1)
+
+    def test_synthesize_fallback_voice_when_file_missing(self):
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        (self.model_path / "voices").mkdir()
+        # No af_heart.pt
+
+        fake_audio = [0.1, 0.2]
+        mock_kokoro = MagicMock()
+        mock_pipeline_inst = MagicMock()
+        mock_pipeline_inst.return_value = [("graphemes", "phonemes", fake_audio)]
+
+        mock_sf = MagicMock()
+        mock_sf.write.side_effect = lambda buf, d, sr, format, subtype: buf.write(b"RIFF_WAV")
+
+        mock_numpy = MagicMock()
+        mock_numpy.concatenate.return_value = fake_audio
+
+        deps = {
+            "soundfile": mock_sf,
+            "kokoro": mock_kokoro,
+            "numpy": mock_numpy,
+        }
+
+        with patch.dict("sys.modules", deps):
+            service = TTSService(model_dir=str(self.model_path))
+            service.pipeline = mock_pipeline_inst
+
+            audio_bytes = asyncio.run(service.synthesize("Hello"))
+            self.assertEqual(audio_bytes, b"RIFF_WAV")
+            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], "af_heart")
+
+    def test_load_model_initializes_with_kmodel_and_local_config(self):
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        (self.model_path / "voices").mkdir()
+        (self.model_path / "config.json").touch()
+
+        mock_kokoro = MagicMock()
+        mock_kmodel_cls = MagicMock()
+        mock_kpipeline_cls = MagicMock()
+        mock_kokoro.KModel = mock_kmodel_cls
+        mock_kokoro.KPipeline = mock_kpipeline_cls
+
+        deps = {
+            "soundfile": MagicMock(),
+            "kokoro": mock_kokoro,
+            "numpy": MagicMock(),
+        }
+
+        with patch.dict("sys.modules", deps):
+            service = TTSService(model_dir=str(self.model_path))
+            service._load_model()
+
+            # Verify KModel was instantiated with local config and model weights
+            mock_kmodel_cls.assert_called_once_with(
+                config=str(self.model_path / "config.json"),
+                model=str(self.model_path / "kokoro-v1_0.pth"),
+            )
+            # Verify KPipeline was instantiated with model=kmodel and NOT model_path
+            mock_kpipeline_cls.assert_called_once()
+            call_kwargs = mock_kpipeline_cls.call_args[1]
+            self.assertIn("model", call_kwargs)
+            self.assertNotIn("model_path", call_kwargs)
+            self.assertEqual(call_kwargs["device"], "cpu")
 
 
 if __name__ == "__main__":

@@ -86,14 +86,26 @@ class TTSService:
         if self.pipeline is not None:
             return
 
-        from kokoro import KPipeline
-
         logger.info(f"Lazily loading Kokoro model from {self.weights_path} on CPU...")
         # Ensure offline mode
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
-        self.pipeline = KPipeline(lang_code="a", model_path=str(self.weights_path))
+        try:
+            from kokoro import KModel, KPipeline
+
+            config_path = self.model_dir / "config.json"
+            if config_path.is_file():
+                kmodel = KModel(config=str(config_path), model=str(self.weights_path))
+            else:
+                kmodel = KModel(model=str(self.weights_path))
+            self.pipeline = KPipeline(lang_code="a", model=kmodel, device="cpu", repo_id=None)
+        except (ImportError, AttributeError, TypeError) as exc:
+            logger.debug(f"KModel initialization fallback: {exc}")
+            from kokoro import KPipeline
+
+            self.pipeline = KPipeline(lang_code="a", model=str(self.weights_path), device="cpu")
+
         logger.info("Kokoro model loaded successfully.")
 
     def _synthesize_sync(self, text: str) -> bytes:
@@ -107,7 +119,14 @@ class TTSService:
         if not has_speakable_content(cleaned):
             raise ValueError("No speakable English prose found in the provided text.")
 
-        generator = self.pipeline(cleaned, voice="af_heart", speed=1)
+        # Resolve voice path to local .pt file to prevent online Hugging Face download attempts
+        voice_file = self.model_dir / "voices" / "af_heart.pt"
+        if voice_file.is_file():
+            voice_param = str(voice_file)
+        else:
+            voice_param = "af_heart"
+
+        generator = self.pipeline(cleaned, voice=voice_param, speed=1)
 
         audio_segments = []
         for _, _, audio in generator:
