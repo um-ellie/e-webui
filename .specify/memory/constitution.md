@@ -16,18 +16,24 @@ Sync Impact Report:
 
 ## Core Principles
 
-### I. Infrastructure Isolation (NON-NEGOTIABLE)
+## Incus Container Access (e-webui-app)
 
-The agent MUST NOT interact with any installed containers or with the Incus configuration, under any circumstances. This prohibition applies equally to testing the application, running the application, debugging, and any other purpose.
-
-Specifically, the agent MUST NOT:
-- Execute any `incus` command or otherwise invoke the Incus API;
-- Create, start, stop, restart, modify, delete, or open a shell or run commands inside any container;
-- Change any Incus configuration, including profiles, devices, networks, storage, and proxy settings.
-
-The agent's scope of work is strictly limited to the application itself: the files inside the project directory and the application's source code. Nothing outside the project directory may be modified.
-
-If a task requires running, testing, or inspecting anything inside a container or within the Incus environment, the agent MUST stop work on that task, explain what is needed and why, and wait for the user to perform that step manually. The agent MUST NOT attempt a workaround.
+- The agent MAY run commands inside the Incus container `e-webui-app`
+  using `incus exec e-webui-app -- <command>` for diagnosis and debugging.
+- Allowed by default (read-only diagnostics):
+  - `incus list`, `incus info e-webui-app`
+  - `incus exec e-webui-app -- journalctl ...`, `ps`, `ss -tlnp`, `cat`, `ls`, `tail`
+  - `incus exec e-webui-app -- curl http://127.0.0.1:<port>/api/health`
+  - `incus file pull` to read files from the container
+- Requires explicit approval from the user before running:
+  - Any command that modifies files, installs packages, or restarts services
+    inside the container
+  - `incus file push`, `incus config`, `incus restart`, `incus stop`
+- Forbidden:
+  - Touching any other container (especially `ollama`)
+  - `incus delete`, `incus snapshot restore`, or anything that removes data
+  - Changing host system configuration
+- Always show the exact command before running it and summarize the output.
 
 ### II. Workspace-Only Scope Boundary
 

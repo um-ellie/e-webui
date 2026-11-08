@@ -6,7 +6,8 @@
 
 import { store } from '../store.js';
 import { renderMarkdown, attachCodeCopyHandlers } from '../markdown.js';
-import { applyDirectionToElement } from '../rtl.js';
+import { applyDirectionToElement, isPredominantlyEnglish } from '../rtl.js';
+import { ttsController } from '../tts.js';
 
 function escapeHtml(text) {
   return String(text || '')
@@ -413,6 +414,63 @@ Message: ${escapeHtml(msg.error || msg.content || 'Unknown error')}</code></pre>
       }
     });
     bar.appendChild(btnCopy);
+
+    // TTS Read Aloud action (English replies only)
+    if (isPredominantlyEnglish(msg.content)) {
+      const btnTTS = document.createElement('button');
+      btnTTS.className = 'btn-icon btn-tts';
+      btnTTS.title = 'Read aloud';
+      btnTTS.setAttribute('aria-label', 'Read reply aloud');
+      btnTTS.setAttribute('role', 'button');
+      btnTTS.setAttribute('aria-pressed', 'false');
+
+      const renderTtsIcon = (state, errorHint = null) => {
+        btnTTS.classList.remove('loading', 'playing', 'error-hint');
+        if (state === 'loading') {
+          btnTTS.classList.add('loading');
+          btnTTS.title = 'Generating speech…';
+          btnTTS.setAttribute('aria-pressed', 'true');
+          btnTTS.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><circle cx="17" cy="12" r="2"/></svg>';
+        } else if (state === 'playing') {
+          btnTTS.classList.add('playing');
+          btnTTS.title = 'Stop reading aloud';
+          btnTTS.setAttribute('aria-pressed', 'true');
+          btnTTS.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+        } else {
+          // Idle state
+          btnTTS.setAttribute('aria-pressed', 'false');
+          if (errorHint) {
+            btnTTS.classList.add('error-hint');
+            btnTTS.title = errorHint;
+            setTimeout(() => {
+              btnTTS.classList.remove('error-hint');
+              btnTTS.title = 'Read aloud';
+            }, 3000);
+          } else {
+            btnTTS.title = 'Read aloud';
+          }
+          btnTTS.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+        }
+      };
+
+      // Set initial state
+      renderTtsIcon(ttsController.getState(msg.id));
+
+      // Subscribe to controller state changes
+      ttsController.subscribe((targetId, state, error) => {
+        if (targetId === msg.id) {
+          renderTtsIcon(state, error);
+        } else if (state === 'playing') {
+          renderTtsIcon('idle');
+        }
+      });
+
+      btnTTS.addEventListener('click', async () => {
+        await ttsController.play(msg.id, msg.content);
+      });
+
+      bar.appendChild(btnTTS);
+    }
 
     // Like action
     const btnLike = document.createElement('button');

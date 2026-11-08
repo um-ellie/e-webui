@@ -87,6 +87,56 @@ class TestUIContracts(unittest.TestCase):
         self.assertIn("invalid_model_request", content)
         self.assertIn("Invalid Model Request", content)
 
+    def test_tts_controller_implements_caching_and_lifecycle(self):
+        """Verify that tts.js implements single audio stream, cache map, and stop controls."""
+        tts_file = WORKSPACE_ROOT / "app/static/js/tts.js"
+        self.assertTrue(tts_file.exists(), f"tts.js missing: {tts_file}")
+        with open(tts_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("class TTSController", content)
+        self.assertIn("new Audio()", content)
+        self.assertIn("this.cache = new Map()", content)
+        self.assertIn("this.cache.has(messageId)", content)
+        self.assertIn("URL.createObjectURL(blob)", content)
+        self.assertIn("stop()", content)
+        self.assertIn("this.audio.pause()", content)
+
+    def test_tts_speaker_button_visibility_and_script_filter(self):
+        """Verify that rtl.js and chat.js enforce Latin language detection and hide for code-only."""
+        rtl_file = WORKSPACE_ROOT / "app/static/js/rtl.js"
+        chat_file = WORKSPACE_ROOT / "app/static/js/components/chat.js"
+
+        with open(rtl_file, "r", encoding="utf-8") as f:
+            rtl_content = f.read()
+        self.assertIn("isPredominantlyEnglish", rtl_content)
+        self.assertIn("hasSpeakableContent", rtl_content)
+
+        with open(chat_file, "r", encoding="utf-8") as f:
+            chat_content = f.read()
+        self.assertIn("isPredominantlyEnglish(msg.content)", chat_content)
+        self.assertIn("btn-tts", chat_content)
+        self.assertIn("aria-label", chat_content)
+
+    def test_tts_session_switch_lifecycle(self):
+        """Verify that app.js stops audio playback when switching or deleting chat sessions."""
+        app_file = WORKSPACE_ROOT / "app/static/js/app.js"
+        with open(app_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("ttsController.stop()", content)
+        self.assertIn("session:active-changed", content)
+
+    def test_tts_css_classes_defined(self):
+        """Verify style.css includes classes for TTS button and idle/loading/playing states."""
+        css_file = WORKSPACE_ROOT / "app/static/style.css"
+        with open(css_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn(".btn-tts", content)
+        self.assertIn(".btn-tts.loading", content)
+        self.assertIn(".btn-tts.playing", content)
+
 
 if __name__ == "__main__":
     unittest.main()

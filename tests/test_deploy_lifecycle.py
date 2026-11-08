@@ -78,6 +78,10 @@ class TestDeployLifecycle(unittest.TestCase):
             self.assertFalse(any(".env" in n for n in names))
             self.assertFalse(any("venv" in n for n in names))
             self.assertFalse(any("specs" in n for n in names))
+            self.assertFalse(any("shared" in n for n in names))
+            self.assertFalse(any("models" in n for n in names))
+            self.assertFalse(any("interpreters" in n for n in names))
+            self.assertFalse(any(".pth" in n for n in names))
 
     def test_archive_checksum_calculation(self):
         """Verify SHA-256 checksum computation matches expected hash."""
@@ -562,6 +566,265 @@ class TestDeployLifecycle(unittest.TestCase):
         )
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("schema", (res.stderr + res.stdout).lower())
+
+    def test_fresh_install_tts_provisioning(self):
+        """Verify deploy --install provisions Python 3.11, audio packages, venv, and Kokoro model."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.0.0", release_id="20261107-100000-a1b2c3d4")
+
+        res = subprocess.run(
+            ["bash", str(deploy_sh), "--install", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0, f"Install failed: {res.stderr}\n{res.stdout}")
+
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+
+        # Check interpreter directory and standalone python
+        self.assertTrue((app_dir / "interpreters" / "python-3.11" / "bin" / "python3").exists())
+
+        # Check model weights and voices directory
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth").exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth").exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "voices").exists())
+
+        # Check venv has py3.11 prefix and uvicorn
+        venvs_dir = app_dir / "venvs"
+        py311_venvs = [v for v in venvs_dir.iterdir() if v.name.startswith("py3.11-")]
+        self.assertTrue(len(py311_venvs) > 0, "No py3.11 venv directory found")
+
+        # Check deployment.env contains offline variables
+        deploy_env = (app_dir / "deployment.env").read_text()
+        self.assertIn("HF_HUB_OFFLINE=1", deploy_env)
+        self.assertIn("KOKORO_MODEL_DIR=/opt/e-webui/shared/models/kokoro", deploy_env)
+
+        # Check state file recorded tts_environment
+        state_file = app_dir / ".deploy_state"
+        self.assertTrue(state_file.exists())
+        state_data = json.loads(state_file.read_text())
+        self.assertIn("tts_environment", state_data)
+        self.assertTrue(state_data["tts_environment"]["model_present"])
+
+    def test_update_migrates_py313_venv(self):
+        """Verify deploy --update detects Python 3.13 venv, provisions Python 3.11, and migrates cleanly."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+        app_dir.mkdir(parents=True, exist_ok=True)
+
+        # Setup an existing active release running on Python 3.13
+        old_rel_id = "20261106-100000-00000001"
+        (app_dir / "releases" / old_rel_id).mkdir(parents=True, exist_ok=True)
+        old_venv = app_dir / "venvs" / "legacy-py313-hash"
+        (old_venv / "bin").mkdir(parents=True, exist_ok=True)
+        # Create dummy Python 3.13 script
+        py313_script = (
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "if '-V' in sys.argv: print('Python 3.13.5'); sys.exit(0)\n"
+            "sys.exit(1)\n"
+        )
+        (old_venv / "bin" / "python3").write_text(py313_script)
+        (old_venv / "bin" / "python3").chmod(0o755)
+        (old_venv / "bin" / "uvicorn").write_text("#!/bin/sh\n")
+        (old_venv / "bin" / "uvicorn").chmod(0o755)
+
+        # Link release and current
+        os.symlink(str(old_venv), str(app_dir / "releases" / old_rel_id / "venv"))
+        os.symlink(f"releases/{old_rel_id}", str(app_dir / "current"))
+
+        # Setup state
+        state_data = {
+            "schema_version": 2,
+            "container_name": "e-webui-app",
+            "active_release": old_rel_id,
+            "active_venv_hash": "legacy-py313-hash",
+            "active_version": "0.13.0"
+        }
+        (app_dir / ".deploy_state").write_text(json.dumps(state_data))
+
+        # Build new release package
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.1.0", release_id="20261107-110000-b2c3d4e5")
+
+        res = subprocess.run(
+            ["bash", str(deploy_sh), "--update", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0, f"Update failed: {res.stderr}\n{res.stdout}")
+        self.assertIn("migrating to compatible python 3.11", res.stdout.lower() + res.stderr.lower())
+
+        # Verify new venv is keyed with py3.11
+        new_state = json.loads((app_dir / ".deploy_state").read_text())
+        self.assertEqual(new_state["active_release"], "20261107-110000-b2c3d4e5")
+        self.assertEqual(new_state["previous_healthy_release"], old_rel_id)
+
+        # Verify standalone Python 3.11 was installed
+        self.assertTrue((app_dir / "interpreters" / "python-3.11" / "bin" / "python3").exists())
+
+    def test_model_download_failure_resilience(self):
+        """Verify that model download failure does not fail deployment or trigger rollback."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.2.0", release_id="20261107-120000-c3d4e5f6")
+
+        test_env = self.env.copy()
+        test_env["FAIL_MODEL_DOWNLOAD"] = "1"
+
+        res = subprocess.run(
+            ["bash", str(deploy_sh), "--install", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=test_env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0, f"Deploy failed despite non-blocking model failure: {res.stderr}\n{res.stdout}")
+        out = (res.stdout + res.stderr).lower()
+        self.assertIn("download failed", out)
+        self.assertIn("--download-model", out)
+
+        # Service must still be healthy
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+        self.assertTrue((app_dir / "current").exists())
+
+        # Model should be missing, but state recorded
+        state_file = app_dir / ".deploy_state"
+        self.assertTrue(state_file.exists())
+        state_data = json.loads(state_file.read_text())
+        self.assertIn("tts_environment", state_data)
+        self.assertFalse(state_data["tts_environment"]["model_present"])
+
+    def test_skip_model_download_and_standalone_download_model(self):
+        """Verify --skip-model-download bypasses weights and --download-model fetches weights on demand."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.3.0", release_id="20261107-130000-d4e5f6a1")
+
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+        model_file = app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth"
+        legacy_file = app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth"
+
+        # 1. Install with --skip-model-download
+        res = subprocess.run(
+            ["bash", str(deploy_sh), "--install", "--skip-model-download", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0, f"Install with --skip-model-download failed: {res.stderr}\n{res.stdout}")
+        self.assertIn("skipping kokoro model weights download", res.stdout.lower())
+        self.assertFalse(model_file.exists())
+        self.assertFalse(legacy_file.exists())
+
+        # 2. Run standalone --download-model
+        res_dl = subprocess.run(
+            ["bash", str(deploy_sh), "--download-model", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dl.returncode, 0, f"Standalone --download-model failed: {res_dl.stderr}\n{res_dl.stdout}")
+        self.assertTrue(model_file.exists())
+        self.assertTrue(legacy_file.exists())
+
+        # 3. Running a second time is idempotent
+        res_idempotent = subprocess.run(
+            ["bash", str(deploy_sh), "--download-model", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_idempotent.returncode, 0)
+        self.assertIn("already present and verified", res_idempotent.stdout.lower())
+
+    def test_status_and_repair_tts_environment(self):
+        """Verify --status displays TTS diagnostics and --repair self-heals broken TTS components."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.4.0", release_id="20261107-140000-e5f6a1b2")
+
+        # 1. Install deployment
+        res_inst = subprocess.run(
+            ["bash", str(deploy_sh), "--install", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_inst.returncode, 0)
+
+        # 2. Check --status output contains TTS sections
+        res_status = subprocess.run(
+            ["bash", str(deploy_sh), "--status", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_status.returncode, 0)
+        status_out = res_status.stdout
+        self.assertIn("Text-to-Speech (TTS) Environment:", status_out)
+        self.assertIn("System Audio Packages:", status_out)
+        self.assertIn("Application Python:", status_out)
+        self.assertIn("Kokoro-82M Weights:", status_out)
+
+        # 3. Simulate missing model weights and missing audio packages
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+        for fname in ["kokoro-v1_0.pth", "kokoro-v0_19.pth"]:
+            fpath = app_dir / "shared" / "models" / "kokoro" / fname
+            if fpath.is_symlink() or fpath.exists():
+                fpath.unlink()
+
+        # Mark audio packages as missing in mock state
+        (self.state_dir / "e-webui-app_missing_audio_pkgs").write_text("1")
+
+        # Verify status now reports missing
+        res_status_broken = subprocess.run(
+            ["bash", str(deploy_sh), "--status", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn("MISSING", res_status_broken.stdout)
+
+        # 4. Trigger --repair
+        res_repair = subprocess.run(
+            ["bash", str(deploy_sh), "--repair", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_repair.returncode, 0, f"Repair failed: {res_repair.stderr}\n{res_repair.stdout}")
+        self.assertIn("repair succeeded", res_repair.stdout.lower())
+
+        # Verify model weights are restored
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth").exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth").exists())
+
+    def test_model_download_fallback_to_v019(self):
+        """Verify download falls back to v0.19 if kokoro-v1_0.pth returns 404."""
+        deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"
+        rel_pkg = self._build_test_release_package(self.temp_dir, version="1.4.0", release_id="20261107-140000-f1e2d3c4")
+
+        c_root = self.mock_state.containers_dir / "e-webui-app"
+        app_dir = c_root / "opt" / "e-webui"
+
+        # Simulate 404 for kokoro-v1_0.pth
+        (self.state_dir / "simulate_v1_404").write_text("1")
+
+        res = subprocess.run(
+            ["bash", str(deploy_sh), "--install", "--release", str(rel_pkg), "-y", "e-webui-app"],
+            env=self.env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0, f"Install with fallback failed: {res.stderr}\n{res.stdout}")
+        self.assertIn("fallback to v0.19", res.stdout.lower())
+
+        # Both files should exist (one being a symlink to the other)
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v1_0.pth").exists())
+        self.assertTrue((app_dir / "shared" / "models" / "kokoro" / "kokoro-v0_19.pth").exists())
 
 
 if __name__ == "__main__":

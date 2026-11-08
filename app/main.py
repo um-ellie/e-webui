@@ -5,14 +5,15 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import APP_HOST, APP_PORT, OLLAMA_HOST
-from app.models import HealthResponse, ModelListResponse, PromptRequest
+from app.models import HealthResponse, ModelListResponse, PromptRequest, TTSRequest
 from app.services.ollama_client import OllamaClient
+from app.services.tts_service import tts_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -72,6 +73,7 @@ async def add_security_headers(request, call_next):
         "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
+        "media-src 'self' blob:; "
         "connect-src 'self';"
     )
     return response
@@ -160,6 +162,52 @@ async def generate_response(request: PromptRequest):
             "X-Request-ID": req_id,
         },
     )
+
+
+@app.post("/api/tts/synthesize")
+async def synthesize_speech(request: TTSRequest):
+    """Synthesizes text into 24kHz WAV audio via Kokoro on CPU."""
+    if not tts_service.available:
+        logger.warning(f"TTS synthesis requested but service unavailable: {tts_service.error_reason}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=tts_service.error_reason or "TTS service is currently unavailable.",
+        )
+
+    try:
+        start_time = time.monotonic()
+        wav_bytes = await tts_service.synthesize(request.text)
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        logger.info(
+            f"TTS synthesized successfully for message_id='{request.message_id}' "
+            f"in {duration_ms}ms ({len(wav_bytes)} bytes)"
+        )
+        return Response(
+            content=wav_bytes,
+            media_type="audio/wav",
+            headers={
+                "Content-Type": "audio/wav",
+                "Content-Disposition": 'inline; filename="speech.wav"',
+                "Cache-Control": "private, max-age=86400",
+                "X-Synthesis-Duration-Ms": str(duration_ms),
+            },
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
+    except RuntimeError as run_err:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(run_err),
+        )
+    except Exception as exc:
+        logger.error(f"TTS synthesis failed for message_id='{request.message_id}': {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to synthesize audio.",
+        )
 
 
 if __name__ == "__main__":
