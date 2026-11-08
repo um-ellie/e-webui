@@ -22,6 +22,7 @@ class TTSService:
         self._lock = asyncio.Lock()
         self._semaphore = asyncio.Semaphore(1)
         self.weights_path: Optional[Path] = None
+        self.voice_tensor: Optional[object] = None
         self.available: bool = False
         self.error_reason: Optional[str] = None
 
@@ -42,6 +43,14 @@ class TTSService:
         except ImportError:
             self.available = False
             self.error_reason = "numpy package is not installed."
+            logger.warning(f"TTS unavailable: {self.error_reason}")
+            return
+
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.available = False
+            self.error_reason = "torch package is not installed."
             logger.warning(f"TTS unavailable: {self.error_reason}")
             return
 
@@ -77,6 +86,14 @@ class TTSService:
             logger.warning(f"TTS unavailable: {self.error_reason}")
             return
 
+        # Check architecture config file
+        config_path = self.model_dir / "config.json"
+        if not config_path.is_file():
+            self.available = False
+            self.error_reason = f"Model config (config.json) not found in {self.model_dir}"
+            logger.warning(f"TTS unavailable: {self.error_reason}")
+            return
+
         self.available = True
         self.error_reason = None
         logger.info(f"TTS service ready. Resolved model weights at: {self.weights_path}")
@@ -91,14 +108,18 @@ class TTSService:
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
+        config_path = self.model_dir / "config.json"
+        if not config_path.is_file():
+            raise RuntimeError(f"Kokoro model config.json not found in {self.model_dir}")
+
         try:
             from kokoro import KModel, KPipeline
 
-            config_path = self.model_dir / "config.json"
-            if config_path.is_file():
-                kmodel = KModel(config=str(config_path), model=str(self.weights_path))
-            else:
-                kmodel = KModel(model=str(self.weights_path))
+            kmodel = KModel(config=str(config_path), model=str(self.weights_path))
+            if hasattr(kmodel, "to"):
+                kmodel = kmodel.to("cpu")
+            if hasattr(kmodel, "eval"):
+                kmodel = kmodel.eval()
             self.pipeline = KPipeline(lang_code="a", model=kmodel, device="cpu", repo_id=None)
         except (ImportError, AttributeError, TypeError) as exc:
             logger.debug(f"KModel initialization fallback: {exc}")
@@ -112,6 +133,7 @@ class TTSService:
         """Performs CPU-bound speech synthesis and packs audio into 24kHz PCM WAV."""
         import numpy as np
         import soundfile as sf
+        import torch
 
         self._load_model()
 
@@ -119,18 +141,29 @@ class TTSService:
         if not has_speakable_content(cleaned):
             raise ValueError("No speakable English prose found in the provided text.")
 
-        # Resolve voice path to local .pt file to prevent online Hugging Face download attempts
+        # Resolve voice path or preloaded tensor to prevent online Hugging Face download attempts
         voice_file = self.model_dir / "voices" / "af_heart.pt"
-        if voice_file.is_file():
-            voice_param = str(voice_file)
-        else:
-            voice_param = "af_heart"
+        if self.voice_tensor is None:
+            if voice_file.is_file():
+                try:
+                    self.voice_tensor = torch.load(str(voice_file), weights_only=True, map_location="cpu")
+                except Exception as e:
+                    logger.warning(f"Failed to pre-load voice tensor from {voice_file}: {e}")
+                    self.voice_tensor = str(voice_file)
+            else:
+                self.voice_tensor = "af_heart"
 
-        generator = self.pipeline(cleaned, voice=voice_param, speed=1)
+        generator = self.pipeline(cleaned, voice=self.voice_tensor, speed=1)
 
         audio_segments = []
         for _, _, audio in generator:
             if audio is not None and len(audio) > 0:
+                if hasattr(audio, "detach"):
+                    audio = audio.detach().cpu().numpy()
+                elif hasattr(audio, "numpy"):
+                    audio = audio.numpy()
+                else:
+                    audio = np.asarray(audio, dtype=np.float32)
                 audio_segments.append(audio)
 
         if not audio_segments:

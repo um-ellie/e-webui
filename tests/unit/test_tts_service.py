@@ -18,6 +18,7 @@ class TestTTSService(unittest.TestCase):
             "soundfile": MagicMock(),
             "numpy": MagicMock(),
             "kokoro": MagicMock(),
+            "torch": MagicMock(),
         }
 
     def tearDown(self):
@@ -38,10 +39,20 @@ class TestTTSService(unittest.TestCase):
             self.assertFalse(service.available)
             self.assertIn("Voices directory not found", str(service.error_reason))
 
-    def test_environment_check_resolved_successfully(self):
-        # Has weight file and voices directory
+    def test_environment_check_missing_config_file(self):
+        # Has weight file and voices directory but no config.json
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        with patch.dict("sys.modules", self.mock_deps):
+            service = TTSService(model_dir=str(self.model_path))
+            self.assertFalse(service.available)
+            self.assertIn("config.json", str(service.error_reason))
+
+    def test_environment_check_resolved_successfully(self):
+        # Has weight file, voices directory, and config.json
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        (self.model_path / "voices").mkdir()
+        (self.model_path / "config.json").touch()
         with patch.dict("sys.modules", self.mock_deps):
             service = TTSService(model_dir=str(self.model_path))
             self.assertTrue(service.available)
@@ -49,9 +60,10 @@ class TestTTSService(unittest.TestCase):
             self.assertEqual(service.weights_path, self.model_path / "kokoro-v1_0.pth")
 
     def test_environment_check_fallback_to_v019(self):
-        # Has v0.19 weight file and voices directory
+        # Has v0.19 weight file, voices directory, and config.json
         (self.model_path / "kokoro-v0_19.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "config.json").touch()
         with patch.dict("sys.modules", self.mock_deps):
             service = TTSService(model_dir=str(self.model_path))
             self.assertTrue(service.available)
@@ -68,6 +80,7 @@ class TestTTSService(unittest.TestCase):
     def test_synthesize_non_speakable_text_raises_value_error(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "config.json").touch()
 
         with patch.dict("sys.modules", self.mock_deps):
             service = TTSService(model_dir=str(self.model_path))
@@ -80,6 +93,7 @@ class TestTTSService(unittest.TestCase):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
         (self.model_path / "voices" / "af_heart.pt").touch()
+        (self.model_path / "config.json").touch()
 
         fake_audio = [0.1, 0.2, 0.3]
 
@@ -97,10 +111,15 @@ class TestTTSService(unittest.TestCase):
         mock_numpy = MagicMock()
         mock_numpy.concatenate.return_value = fake_audio
 
+        mock_torch = MagicMock()
+        mock_voice_tensor = MagicMock()
+        mock_torch.load.return_value = mock_voice_tensor
+
         deps = {
             "soundfile": mock_sf,
             "kokoro": mock_kokoro,
             "numpy": mock_numpy,
+            "torch": mock_torch,
         }
 
         with patch.dict("sys.modules", deps):
@@ -110,14 +129,55 @@ class TestTTSService(unittest.TestCase):
             audio_bytes = asyncio.run(service.synthesize("Hello, this is a test."))
             self.assertEqual(audio_bytes, b"RIFF_FAKE_WAV_BYTES")
             mock_pipeline_inst.assert_called_once()
-            # Local voice file ending in .pt must be used so Hugging Face download is bypassed
-            expected_voice = str(self.model_path / "voices" / "af_heart.pt")
-            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], expected_voice)
+            # Local voice file loaded as tensor into voice parameter
+            mock_torch.load.assert_called_once_with(
+                str(self.model_path / "voices" / "af_heart.pt"),
+                weights_only=True,
+                map_location="cpu",
+            )
+            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], mock_voice_tensor)
             self.assertEqual(mock_pipeline_inst.call_args[1]["speed"], 1)
+
+    def test_synthesize_converts_torch_tensor_chunks_to_numpy(self):
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        (self.model_path / "voices").mkdir()
+        (self.model_path / "config.json").touch()
+
+        mock_tensor = MagicMock()
+        mock_tensor.__len__.return_value = 10
+        mock_numpy_arr = MagicMock()
+        mock_tensor.detach.return_value.cpu.return_value.numpy.return_value = mock_numpy_arr
+
+        mock_kokoro = MagicMock()
+        mock_pipeline_inst = MagicMock()
+        mock_pipeline_inst.return_value = [("graphemes", "phonemes", mock_tensor)]
+
+        mock_sf = MagicMock()
+        mock_sf.write.side_effect = lambda buf, d, sr, format, subtype: buf.write(b"RIFF_WAV")
+
+        mock_numpy = MagicMock()
+        mock_numpy.concatenate.return_value = mock_numpy_arr
+
+        deps = {
+            "soundfile": mock_sf,
+            "kokoro": mock_kokoro,
+            "numpy": mock_numpy,
+            "torch": MagicMock(),
+        }
+
+        with patch.dict("sys.modules", deps):
+            service = TTSService(model_dir=str(self.model_path))
+            service.pipeline = mock_pipeline_inst
+
+            audio_bytes = asyncio.run(service.synthesize("Testing tensor detach."))
+            self.assertEqual(audio_bytes, b"RIFF_WAV")
+            mock_tensor.detach.assert_called_once()
+            mock_numpy.concatenate.assert_called_once_with([mock_numpy_arr])
 
     def test_synthesize_fallback_voice_when_file_missing(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "config.json").touch()
         # No af_heart.pt
 
         fake_audio = [0.1, 0.2]
@@ -135,6 +195,7 @@ class TestTTSService(unittest.TestCase):
             "soundfile": mock_sf,
             "kokoro": mock_kokoro,
             "numpy": mock_numpy,
+            "torch": MagicMock(),
         }
 
         with patch.dict("sys.modules", deps):
@@ -160,6 +221,7 @@ class TestTTSService(unittest.TestCase):
             "soundfile": MagicMock(),
             "kokoro": mock_kokoro,
             "numpy": MagicMock(),
+            "torch": MagicMock(),
         }
 
         with patch.dict("sys.modules", deps):

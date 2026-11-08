@@ -70,6 +70,13 @@ kokoro_model_is_present() {
         return 1
     fi
 
+    # Check architecture config presence
+    local config_file
+    config_file="$(tts_config_path "${app_dir}")"
+    if ! container_test_file "${c_name}" "${config_file}"; then
+        return 1
+    fi
+
     return 0
 }
 
@@ -148,21 +155,40 @@ download_kokoro_model() {
     info "Setting up Kokoro-82M persistent storage at ${model_dir}..."
     run_in_container "${c_name}" mkdir -p "${model_dir}" "${voices_dir}"
 
-    info "1/3 Downloading Kokoro-82M model weights (kokoro-v1_0.pth)..."
+    info "1/3 Checking/Downloading Kokoro-82M model weights (kokoro-v1_0.pth)..."
     local weights_url="${repo_url}/kokoro-v1_0.pth"
     local download_success=0
 
-    if download_file_to_container "${c_name}" "${weights_url}" "${v1_weights}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
-        download_success=1
-        # Maintain backward compatibility for tools/references expecting kokoro-v0_19.pth
-        run_in_container "${c_name}" ln -sfn kokoro-v1_0.pth "${v019_weights}" || true
-    else
-        warn "Direct download of kokoro-v1_0.pth failed. Attempting fallback to v0.19 release..."
-        local fallback_url="${hf_base}/hexgrad/Kokoro-82M/resolve/v0.19/kokoro-v0_19.pth"
-        if download_file_to_container "${c_name}" "${fallback_url}" "${v019_weights}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
+    local current_weights=""
+    if container_test_file "${c_name}" "${v1_weights}"; then
+        current_weights="${v1_weights}"
+    elif container_test_file "${c_name}" "${v019_weights}"; then
+        current_weights="${v019_weights}"
+    fi
+
+    if [ -n "${current_weights}" ]; then
+        local cur_size
+        cur_size=$(run_in_container "${c_name}" wc -c "${current_weights}" 2>/dev/null | awk '{print $1}' || echo "0")
+        cur_size="${cur_size//[[:space:]]/}"
+        if [ -n "${cur_size}" ] && [ "${cur_size}" -ge "${KOKORO_MIN_WEIGHTS_SIZE}" ]; then
+            info "Kokoro-82M model weights already present and verified in ${current_weights} (${cur_size} bytes)."
             download_success=1
-            # Maintain forward compatibility symlink for kokoro-v1_0.pth
-            run_in_container "${c_name}" ln -sfn kokoro-v0_19.pth "${v1_weights}" || true
+        fi
+    fi
+
+    if [ "${download_success}" -ne 1 ]; then
+        if download_file_to_container "${c_name}" "${weights_url}" "${v1_weights}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
+            download_success=1
+            # Maintain backward compatibility for tools/references expecting kokoro-v0_19.pth
+            run_in_container "${c_name}" ln -sfn kokoro-v1_0.pth "${v019_weights}" || true
+        else
+            warn "Direct download of kokoro-v1_0.pth failed. Attempting fallback to v0.19 release..."
+            local fallback_url="${hf_base}/hexgrad/Kokoro-82M/resolve/v0.19/kokoro-v0_19.pth"
+            if download_file_to_container "${c_name}" "${fallback_url}" "${v019_weights}" "${KOKORO_MIN_WEIGHTS_SIZE}"; then
+                download_success=1
+                # Maintain forward compatibility symlink for kokoro-v1_0.pth
+                run_in_container "${c_name}" ln -sfn kokoro-v0_19.pth "${v1_weights}" || true
+            fi
         fi
     fi
 
@@ -172,8 +198,10 @@ download_kokoro_model() {
     fi
 
     info "2/3 Downloading Kokoro-82M architecture config (${KOKORO_CONFIG_FILE})..."
-    local config_url="${repo_url}/${KOKORO_CONFIG_FILE}"
-    download_file_to_container "${c_name}" "${config_url}" "${config_file}" 0 || true
+    if ! container_test_file "${c_name}" "${config_file}"; then
+        local config_url="${repo_url}/${KOKORO_CONFIG_FILE}"
+        download_file_to_container "${c_name}" "${config_url}" "${config_file}" 0 || true
+    fi
 
     info "3/3 Downloading voice profile embeddings..."
     for voice in "${DEFAULT_KOKORO_VOICES[@]}"; do
