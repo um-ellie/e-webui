@@ -223,6 +223,18 @@ download_kokoro_model() {
         fi
     done
 
+    # Ensure af_heart.pt exists or alias to an available American voice (e.g. af_sarah.pt)
+    local heart_voice="${voices_dir}/af_heart.pt"
+    if ! container_test_file "${c_name}" "${heart_voice}"; then
+        for fallback_voice in "af_sarah.pt" "af_nicole.pt" "af_bella.pt"; do
+            if container_test_file "${c_name}" "${voices_dir}/${fallback_voice}"; then
+                info "Creating fallback voice symlink af_heart.pt -> ${fallback_voice}..."
+                run_in_container "${c_name}" ln -sfn "${fallback_voice}" "${heart_voice}" || true
+                break
+            fi
+        done
+    fi
+
     success "Kokoro-82M model weights and voice assets successfully placed in persistent storage."
     return 0
 }

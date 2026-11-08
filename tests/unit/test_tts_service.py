@@ -39,10 +39,20 @@ class TestTTSService(unittest.TestCase):
             self.assertFalse(service.available)
             self.assertIn("Voices directory not found", str(service.error_reason))
 
+    def test_environment_check_empty_voices_dir(self):
+        # Has weight file and empty voices directory
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        (self.model_path / "voices").mkdir()
+        with patch.dict("sys.modules", self.mock_deps):
+            service = TTSService(model_dir=str(self.model_path))
+            self.assertFalse(service.available)
+            self.assertIn("No voice profile embeddings", str(service.error_reason))
+
     def test_environment_check_missing_config_file_when_no_bundled(self):
         # Has weight file and voices directory, but no config.json and bundled is missing
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         with patch.dict("sys.modules", self.mock_deps):
             with patch("pathlib.Path.is_file", autospec=True) as mock_is_file:
                 def fake_is_file(path_obj):
@@ -58,6 +68,7 @@ class TestTTSService(unittest.TestCase):
         # Has weight file and voices directory, but no config.json in model_dir
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         self.assertFalse((self.model_path / "config.json").exists())
 
         with patch.dict("sys.modules", self.mock_deps):
@@ -70,6 +81,7 @@ class TestTTSService(unittest.TestCase):
         # Has weight file, voices directory, and config.json
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         (self.model_path / "config.json").touch()
         with patch.dict("sys.modules", self.mock_deps):
             service = TTSService(model_dir=str(self.model_path))
@@ -81,6 +93,7 @@ class TestTTSService(unittest.TestCase):
         # Has v0.19 weight file, voices directory, and config.json
         (self.model_path / "kokoro-v0_19.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         (self.model_path / "config.json").touch()
         with patch.dict("sys.modules", self.mock_deps):
             service = TTSService(model_dir=str(self.model_path))
@@ -98,6 +111,7 @@ class TestTTSService(unittest.TestCase):
     def test_synthesize_non_speakable_text_raises_value_error(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         (self.model_path / "config.json").touch()
 
         with patch.dict("sys.modules", self.mock_deps):
@@ -159,6 +173,7 @@ class TestTTSService(unittest.TestCase):
     def test_synthesize_converts_torch_tensor_chunks_to_numpy(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         (self.model_path / "config.json").touch()
 
         mock_tensor = MagicMock()
@@ -192,11 +207,12 @@ class TestTTSService(unittest.TestCase):
             mock_tensor.detach.assert_called_once()
             mock_numpy.concatenate.assert_called_once_with([mock_numpy_arr])
 
-    def test_synthesize_fallback_voice_when_file_missing(self):
+    def test_synthesize_fallback_voice_when_af_heart_missing(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_sarah.pt").touch()
         (self.model_path / "config.json").touch()
-        # No af_heart.pt
+        # No af_heart.pt, but af_sarah.pt exists
 
         fake_audio = [0.1, 0.2]
         mock_kokoro = MagicMock()
@@ -209,11 +225,15 @@ class TestTTSService(unittest.TestCase):
         mock_numpy = MagicMock()
         mock_numpy.concatenate.return_value = fake_audio
 
+        mock_torch = MagicMock()
+        mock_voice_tensor = MagicMock()
+        mock_torch.load.return_value = mock_voice_tensor
+
         deps = {
             "soundfile": mock_sf,
             "kokoro": mock_kokoro,
             "numpy": mock_numpy,
-            "torch": MagicMock(),
+            "torch": mock_torch,
         }
 
         with patch.dict("sys.modules", deps):
@@ -222,11 +242,46 @@ class TestTTSService(unittest.TestCase):
 
             audio_bytes = asyncio.run(service.synthesize("Hello"))
             self.assertEqual(audio_bytes, b"RIFF_WAV")
-            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], "af_heart")
+            mock_torch.load.assert_called_once_with(
+                str(self.model_path / "voices" / "af_sarah.pt"),
+                weights_only=True,
+                map_location="cpu",
+            )
+            self.assertEqual(mock_pipeline_inst.call_args[1]["voice"], mock_voice_tensor)
+
+    def test_resolve_voice_file_hierarchy(self):
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        voices_dir = self.model_path / "voices"
+        voices_dir.mkdir()
+        (self.model_path / "config.json").touch()
+
+        with patch.dict("sys.modules", self.mock_deps):
+            service = TTSService(model_dir=str(self.model_path))
+
+            # 1. No files raises FileNotFoundError
+            with self.assertRaises(FileNotFoundError):
+                service._resolve_voice_file()
+
+            # 2. Only British voice exists -> falls back to it
+            (voices_dir / "bm_george.pt").touch()
+            self.assertEqual(service._resolve_voice_file().name, "bm_george.pt")
+
+            # 3. American male voice added -> prefers American over British
+            (voices_dir / "am_adam.pt").touch()
+            self.assertEqual(service._resolve_voice_file().name, "am_adam.pt")
+
+            # 4. American female voice added -> prefers preferred fallback
+            (voices_dir / "af_sarah.pt").touch()
+            self.assertEqual(service._resolve_voice_file().name, "af_sarah.pt")
+
+            # 5. Primary voice added -> prefers af_heart.pt above all
+            (voices_dir / "af_heart.pt").touch()
+            self.assertEqual(service._resolve_voice_file().name, "af_heart.pt")
 
     def test_load_model_initializes_with_kmodel_and_local_config(self):
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
+        (self.model_path / "voices" / "af_heart.pt").touch()
         (self.model_path / "config.json").touch()
 
         mock_kokoro = MagicMock()

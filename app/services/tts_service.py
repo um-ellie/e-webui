@@ -86,6 +86,12 @@ class TTSService:
             logger.warning(f"TTS unavailable: {self.error_reason}")
             return
 
+        if not any(voices_dir.glob("*.pt")):
+            self.available = False
+            self.error_reason = f"No voice profile embeddings (*.pt) found in {voices_dir}"
+            logger.warning(f"TTS unavailable: {self.error_reason}")
+            return
+
         # Check architecture config file (shared directory or bundled repository fallback)
         config_path = self.model_dir / "config.json"
         bundled_config = Path(__file__).resolve().parent.parent / "resources" / "kokoro" / "config.json"
@@ -148,6 +154,37 @@ class TTSService:
 
         logger.info("Kokoro model loaded successfully.")
 
+    def _resolve_voice_file(self) -> Path:
+        """Resolves the best available local voice embedding file (*.pt)."""
+        voices_dir = self.model_dir / "voices"
+
+        # 1. Preferred primary voice (af_heart.pt per Spec 015)
+        primary_voice = voices_dir / "af_heart.pt"
+        if primary_voice.is_file():
+            return primary_voice
+
+        # 2. Preferred fallback American female voices
+        preferred_fallbacks = ["af_sarah.pt", "af_nicole.pt", "af_bella.pt"]
+        for voice_name in preferred_fallbacks:
+            candidate = voices_dir / voice_name
+            if candidate.is_file():
+                logger.info(f"af_heart.pt not found; falling back to preferred voice: {voice_name}")
+                return candidate
+
+        # 3. Any available American voice (af_* or am_*)
+        american_voices = sorted(voices_dir.glob("a*.pt"))
+        if american_voices:
+            logger.info(f"af_heart.pt not found; falling back to American voice: {american_voices[0].name}")
+            return american_voices[0]
+
+        # 4. Any available *.pt file
+        all_voices = sorted(voices_dir.glob("*.pt"))
+        if all_voices:
+            logger.info(f"af_heart.pt not found; falling back to available voice: {all_voices[0].name}")
+            return all_voices[0]
+
+        raise FileNotFoundError(f"No voice files (*.pt) found in {voices_dir}")
+
     def _synthesize_sync(self, text: str) -> bytes:
         """Performs CPU-bound speech synthesis and packs audio into 24kHz PCM WAV."""
         import numpy as np
@@ -161,16 +198,14 @@ class TTSService:
             raise ValueError("No speakable English prose found in the provided text.")
 
         # Resolve voice path or preloaded tensor to prevent online Hugging Face download attempts
-        voice_file = self.model_dir / "voices" / "af_heart.pt"
         if self.voice_tensor is None:
-            if voice_file.is_file():
-                try:
-                    self.voice_tensor = torch.load(str(voice_file), weights_only=True, map_location="cpu")
-                except Exception as e:
-                    logger.warning(f"Failed to pre-load voice tensor from {voice_file}: {e}")
-                    self.voice_tensor = str(voice_file)
-            else:
-                self.voice_tensor = "af_heart"
+            voice_file = self._resolve_voice_file()
+            try:
+                self.voice_tensor = torch.load(str(voice_file), weights_only=True, map_location="cpu")
+                logger.info(f"Loaded voice tensor from {voice_file}")
+            except Exception as e:
+                logger.warning(f"Failed to pre-load voice tensor from {voice_file}: {e}")
+                self.voice_tensor = str(voice_file)
 
         generator = self.pipeline(cleaned, voice=self.voice_tensor, speed=1)
 
