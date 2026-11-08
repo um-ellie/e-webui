@@ -86,13 +86,25 @@ class TTSService:
             logger.warning(f"TTS unavailable: {self.error_reason}")
             return
 
-        # Check architecture config file
+        # Check architecture config file (shared directory or bundled repository fallback)
         config_path = self.model_dir / "config.json"
+        bundled_config = Path(__file__).resolve().parent.parent / "resources" / "kokoro" / "config.json"
+
         if not config_path.is_file():
-            self.available = False
-            self.error_reason = f"Model config (config.json) not found in {self.model_dir}"
-            logger.warning(f"TTS unavailable: {self.error_reason}")
-            return
+            if bundled_config.is_file():
+                # Attempt to auto-populate missing config in shared model storage
+                try:
+                    import shutil
+                    self.model_dir.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(bundled_config, config_path)
+                    logger.info(f"Self-healed missing config: copied {bundled_config} to {config_path}")
+                except Exception as e:
+                    logger.debug(f"Could not copy bundled config to {config_path} ({e}); using bundled path.")
+            else:
+                self.available = False
+                self.error_reason = f"Model config (config.json) not found in {self.model_dir} or {bundled_config}"
+                logger.warning(f"TTS unavailable: {self.error_reason}")
+                return
 
         self.available = True
         self.error_reason = None
@@ -109,13 +121,20 @@ class TTSService:
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
         config_path = self.model_dir / "config.json"
-        if not config_path.is_file():
-            raise RuntimeError(f"Kokoro model config.json not found in {self.model_dir}")
+        bundled_config = Path(__file__).resolve().parent.parent / "resources" / "kokoro" / "config.json"
+
+        resolved_config = None
+        if config_path.is_file():
+            resolved_config = config_path
+        elif bundled_config.is_file():
+            resolved_config = bundled_config
+        else:
+            raise RuntimeError(f"Kokoro model config.json not found in {self.model_dir} or {bundled_config}")
 
         try:
             from kokoro import KModel, KPipeline
 
-            kmodel = KModel(config=str(config_path), model=str(self.weights_path))
+            kmodel = KModel(config=str(resolved_config), model=str(self.weights_path))
             if hasattr(kmodel, "to"):
                 kmodel = kmodel.to("cpu")
             if hasattr(kmodel, "eval"):

@@ -39,14 +39,32 @@ class TestTTSService(unittest.TestCase):
             self.assertFalse(service.available)
             self.assertIn("Voices directory not found", str(service.error_reason))
 
-    def test_environment_check_missing_config_file(self):
-        # Has weight file and voices directory but no config.json
+    def test_environment_check_missing_config_file_when_no_bundled(self):
+        # Has weight file and voices directory, but no config.json and bundled is missing
         (self.model_path / "kokoro-v1_0.pth").touch()
         (self.model_path / "voices").mkdir()
         with patch.dict("sys.modules", self.mock_deps):
+            with patch("pathlib.Path.is_file", autospec=True) as mock_is_file:
+                def fake_is_file(path_obj):
+                    if path_obj.name == "kokoro-v1_0.pth":
+                        return True
+                    return False
+                mock_is_file.side_effect = fake_is_file
+                service = TTSService(model_dir=str(self.model_path))
+                self.assertFalse(service.available)
+                self.assertIn("config.json", str(service.error_reason))
+
+    def test_environment_check_auto_heals_missing_config_from_bundled(self):
+        # Has weight file and voices directory, but no config.json in model_dir
+        (self.model_path / "kokoro-v1_0.pth").touch()
+        (self.model_path / "voices").mkdir()
+        self.assertFalse((self.model_path / "config.json").exists())
+
+        with patch.dict("sys.modules", self.mock_deps):
             service = TTSService(model_dir=str(self.model_path))
-            self.assertFalse(service.available)
-            self.assertIn("config.json", str(service.error_reason))
+            self.assertTrue(service.available)
+            self.assertIsNone(service.error_reason)
+            self.assertTrue((self.model_path / "config.json").exists())
 
     def test_environment_check_resolved_successfully(self):
         # Has weight file, voices directory, and config.json

@@ -197,10 +197,21 @@ download_kokoro_model() {
         return 1
     fi
 
-    info "2/3 Downloading Kokoro-82M architecture config (${KOKORO_CONFIG_FILE})..."
+    info "2/3 Checking/Provisioning Kokoro-82M architecture config (${KOKORO_CONFIG_FILE})..."
     if ! container_test_file "${c_name}" "${config_file}"; then
-        local config_url="${repo_url}/${KOKORO_CONFIG_FILE}"
-        download_file_to_container "${c_name}" "${config_url}" "${config_file}" 0 || true
+        local repo_bundled="${REPO_ROOT:-}/app/resources/kokoro/config.json"
+        local container_bundled="${app_dir}/current/app/resources/kokoro/config.json"
+
+        if container_test_file "${c_name}" "${container_bundled}"; then
+            info "Copying bundled Kokoro architecture config from current container release..."
+            run_in_container "${c_name}" cp -f "${container_bundled}" "${config_file}" || true
+        elif [ -n "${REPO_ROOT:-}" ] && [ -f "${repo_bundled}" ]; then
+            info "Pushing bundled Kokoro architecture config from host workspace..."
+            container_push "${repo_bundled}" "${c_name}${config_file}" || true
+        else
+            local config_url="${repo_url}/${KOKORO_CONFIG_FILE}"
+            download_file_to_container "${c_name}" "${config_url}" "${config_file}" 0 || true
+        fi
     fi
 
     info "3/3 Downloading voice profile embeddings..."

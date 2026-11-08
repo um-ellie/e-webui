@@ -1,4 +1,4 @@
-# Bug Assessment: Read Aloud Fails with Red Icon Due to Missing Kokoro Config in Offline Environment
+# Bug Assessment: Read Aloud Playback Fails Due to Missing Bundled Kokoro Architecture Config
 
 - **Slug**: tts-no-browser-sound
 - **Created**: 2026-11-08
@@ -9,78 +9,73 @@
 ## Report (verbatim or summarized)
 
 User report (translated from Persian):
-> "مشکل همچنان پا برجاست و صدای توی مرورگر شنیده نمی شود."
-> ("The problem still persists and no sound is heard in the browser.")
+> "باز هم کار نمی کنه."
+> ("It still doesn't work.")
 
-Follow-up context from the user:
-- Symptom: When clicking the speaker icon button below an assistant message, the icon briefly indicates loading, then turns red (`.error-hint`), and no audio is played.
-- The previous bug fix (`tts-playback-failure`) was deployed using `deploy.sh --update`, but the failure persists.
+Context from verification (`.specify/bugs/tts-no-browser-sound/test.md`):
+- After deploying the previous fix, clicking the read-aloud speaker button below completed assistant responses still causes the button to turn red (`.error-hint`) without producing audible sound.
+- In `scripts/lib/tts.sh`, `download_kokoro_model` relies on `download_file_to_container` to download `config.json` from `https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.json` via `curl` executed *inside* the container.
+- Because containers run in an offline/restricted network environment where `HF_HUB_OFFLINE=1` is enforced and external connectivity to Hugging Face is blocked, the container-internal `curl` fails silently.
+- Consequently, `/opt/e-webui/shared/models/kokoro/config.json` is not created.
+- In `app/services/tts_service.py`, `_check_environment()` checks for `self.model_dir / "config.json"`. Since the file is absent and no local fallback is bundled, `self.available` is set to `False` (`Model config (config.json) not found in /opt/e-webui/shared/models/kokoro`).
+- Calls to `POST /api/tts/synthesize` return `HTTP 503 Service Unavailable`, causing the frontend `TTSController` to emit an error state and the UI button to turn red.
 
 ## Symptom
 
-When clicking the read-aloud speaker icon (`.btn-tts`) on any English assistant message in the chat interface:
-1. The button briefly enters the `loading` state.
-2. The request to `POST /api/tts/synthesize` fails with an HTTP 500 error.
-3. The speaker icon turns red (`.btn-tts.error-hint`) for 3 seconds and reverts to idle.
-4. No audio is played through the browser's audio output.
+When a user clicks the read-aloud speaker button (`.btn-tts`) on any English assistant message:
+1. The button briefly transitions to loading.
+2. `POST /api/tts/synthesize` returns `HTTP 503` with detail `Model config (config.json) not found in /opt/e-webui/shared/models/kokoro`.
+3. The button transitions to idle with the `.error-hint` class, turning the speaker icon red.
+4. No audio is heard in the browser.
 
 ## Reproduction
 
-1. In an isolated container or offline host where `HF_HUB_OFFLINE=1` is set (or internet access to Hugging Face is blocked/restricted):
-2. Ensure `/opt/e-webui/shared/models/kokoro/` contains `kokoro-v1_0.pth` (or `kokoro-v0_19.pth`) and `voices/af_heart.pt`, but **not** `config.json` (typical state when deployed prior to config download additions or when `kokoro_model_is_present` bypassed model re-downloading).
-3. Send an English prompt to the assistant and wait for the response to complete.
-4. Click the speaker icon button in the message action bar.
-5. Observe that the speaker icon turns red and the browser console logs an error for `POST /api/tts/synthesize`.
+1. In an isolated Incus container where Hugging Face access is blocked and `/opt/e-webui/shared/models/kokoro/` only has weights and voices (no `config.json`):
+2. Run `./scripts/deploy.sh --update`. Observe that container-internal `curl` fails to fetch `config.json` from Hugging Face.
+3. Open the web interface in the browser and prompt the model in English.
+4. Click the speaker icon button below the response.
+5. Observe that the button turns red and the browser console logs an HTTP 503 error.
 
 ## Suspected Code Paths
 
-- `app/services/tts_service.py:97-108` — `_load_model()`:
-  - If `config_path.is_file()` is `False`, `kmodel = KModel(model=str(self.weights_path))` is called with `config=None`.
-  - In `kokoro/model.py`, when `config` is `None`, `hf_hub_download(repo_id=..., filename="config.json")` is called unconditionally.
-  - When `HF_HUB_OFFLINE=1` is set, `hf_hub_download` raises `huggingface_hub.errors.OfflineModeIsEnabled` (or network connection error).
-  - This exception is not caught by `except (ImportError, AttributeError, TypeError)`, causing `_load_model()` to crash.
-  - Furthermore, in the fallback `KPipeline(lang_code="a", model=str(self.weights_path), device="cpu")`, `KPipeline` checks `isinstance(model, KModel)`. Since a string is passed, it executes `self.model = KModel(repo_id=repo_id)` with `config=None` and `model=None`, which again triggers an offline Hub download failure.
-- `app/services/tts_service.py:132-140` — `_synthesize_sync()`:
-  - The pipeline yields audio chunks that may be PyTorch `torch.Tensor` objects or NumPy arrays. Calling `np.concatenate` directly without converting PyTorch tensors to NumPy arrays (`tensor.detach().cpu().numpy()`) can result in type errors.
-  - Voice tensor loading re-evaluates the file or name on every call instead of preloading and reusing a cached tensor.
-- `scripts/lib/tts.sh:44-59` — `kokoro_model_is_present()`:
-  - Only verifies `kokoro-v1_0.pth` (or `v0_19.pth`) and the `voices` directory. It does not check for `config.json`.
-  - As a result, running `./scripts/deploy.sh --update` skips `download_kokoro_model` because the model weights already exist, leaving `config.json` missing in `/opt/e-webui/shared/models/kokoro/`.
-- `app/static/js/tts.js:95-101` — Handles non-OK responses from `POST /api/tts/synthesize` by emitting state `('idle', errMsg)`.
-- `app/static/js/components/chat.js:442-448` — Reacts to `errorHint` by applying `.error-hint` to `btnTTS`, rendering the icon red.
+- `scripts/lib/tts.sh:176` — `download_file_to_container "${c_name}" "${config_url}" "${config_file}" 0 || true`:
+  - Runs `curl` inside the container to fetch `config.json`. In offline/restricted environments, this call fails and `config.json` remains missing.
+- `app/services/tts_service.py:89-95` — `_check_environment()`:
+  - Requires `self.model_dir / "config.json"`. If missing, marks `self.available = False` without attempting to load or copy a bundled repository asset.
+- `app/services/tts_service.py:111-113` — `_load_model()`:
+  - Raises `RuntimeError` if `self.model_dir / "config.json"` is not found on disk.
+- Repository structure:
+  - `config.json` is not bundled anywhere in the project source tree (`app/resources/kokoro/`), forcing total dependency on Hugging Face downloads.
 
 ## Root Cause Hypothesis
 
 **Confidence: High**
 
-In offline container environments where `HF_HUB_OFFLINE=1` is enforced:
-1. `config.json` is missing from the shared model storage `/opt/e-webui/shared/models/kokoro/` because `kokoro_model_is_present` in `scripts/lib/tts.sh` only checks for model weights, so `deploy.sh --update` never downloads `config.json`.
-2. When `config.json` is missing, `TTSService._load_model()` instantiates `KModel(model=str(self.weights_path))` without passing a `config`.
-3. In `kokoro.model.KModel`, if `config` is `None`, it unconditionally invokes `huggingface_hub.hf_hub_download` to fetch `config.json`.
-4. In offline mode, `hf_hub_download` throws `huggingface_hub.errors.OfflineModeIsEnabled`. This error is uncaught, causing `POST /api/tts/synthesize` to return HTTP 500, which causes the frontend speaker button to turn red.
+The deployment lifecycle manager expects the container to download `config.json` from Hugging Face via `curl` inside the container. Because the container is offline or network-isolated, this download fails silently. Simultaneously, `app/services/tts_service.py` requires `config.json` to be present on disk to initialize `KModel`. Because no default or bundled architecture configuration exists within the repository, the service marks itself unavailable (`HTTP 503`), turning the UI speaker icon red.
 
 ## Proposed Remediation
 
 **Preferred**:
-1. **Self-contained Fallback Architecture Config (`app/services/kokoro_config.py` / `app/services/tts_service.py`)**:
-   - Embed the standard Kokoro-82M architecture dictionary `DEFAULT_KOKORO_CONFIG` (istftnet, plbert, and vocabulary settings) directly into the backend code.
-   - In `_load_model()`, if `config_path.is_file()` exists, use it. If not, pass `config=DEFAULT_KOKORO_CONFIG` directly to `KModel` (and optionally write it to `config_path` for future reads).
-   - This guarantees that `KModel` never invokes `hf_hub_download` under any circumstances, even if `config.json` is completely absent from disk.
-2. **Robust Voice Tensor & Audio Chunk Handling**:
-   - Pre-load and cache the voice tensor (`torch.load(..., weights_only=True, map_location="cpu")`) into `self.voice_tensor` so that `KPipeline` never invokes remote voice retrieval.
-   - When consuming chunks from `generator = self.pipeline(...)`, explicitly convert each chunk:
-     `if hasattr(chunk, "detach"): chunk = chunk.detach().cpu().numpy()` before appending to segments and concatenating.
-3. **Provisioning Model Audit Check (`scripts/lib/tts.sh`)**:
-   - Update `kokoro_model_is_present` (or `ensure_kokoro_model`) to ensure `config.json` is present or written if missing.
+1. **Bundle Canonical Architecture Config**:
+   - Add the standard `config.json` for Kokoro-82M directly to the repository under `app/resources/kokoro/config.json`.
+2. **Self-Healing Fallback in `app/services/tts_service.py`**:
+   - In `_check_environment()`:
+     - Check `config_path = self.model_dir / "config.json"`.
+     - If missing, check for bundled config at `app/resources/kokoro/config.json`.
+     - If the bundled config is found, attempt to copy it to `self.model_dir / "config.json"`. If copying fails (e.g. read-only filesystem), use the bundled config path directly.
+     - Mark `self.available = True` if weights, voices, and either local or bundled config exist.
+   - In `_load_model()`:
+     - Use `self.model_dir / "config.json"` if present; otherwise use the bundled config file path.
+3. **Local Staging Copy in `scripts/lib/tts.sh`**:
+   - In `download_kokoro_model()`, before attempting `curl` to Hugging Face, check if `app/resources/kokoro/config.json` exists in the release directory. If so, copy it directly into `${config_file}` via `run_in_container cp`.
 4. **Unit Tests**:
-   - Add unit test verifying that `TTSService._load_model()` succeeds when `config.json` does not exist on disk by falling back to `DEFAULT_KOKORO_CONFIG` without calling `hf_hub_download`.
-   - Verify tensor chunk conversion in audio synthesis.
+   - Update `tests/unit/test_tts_service.py` to test self-healing fallback when `self.model_dir / "config.json"` is absent but the bundled config is available.
 
 ## Risks & Considerations
 
-- **Model Compatibility**: `DEFAULT_KOKORO_CONFIG` matches the canonical Kokoro-82M (v0.19 and v1.0) architecture. It is fully forward and backward compatible with Kokoro-82M weights.
-- **Offline Integrity**: Embedding the fallback configuration completely eliminates runtime reliance on Hugging Face Hub, fulfilling Principle I and offline operation requirements.
+- **Model Compatibility**: Kokoro-82M's architecture config is static and canonical (it does not change between invocations). Bundling it directly in the source tree guarantees 100% offline self-containment with zero external network dependencies.
+- **Repository Size**: `config.json` is under 4 KB, introducing negligible footprint.
 
 ## Open Questions
 
-- None. The failure mode and root cause are completely understood and verified.
+- None.
