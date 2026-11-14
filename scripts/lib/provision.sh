@@ -43,8 +43,11 @@ configure_proxy_devices() {
 
     info "Configuring Incus proxy devices for '${c_name}'..."
 
+    local dev_show
+    dev_show=$(incus_cmd config device show "${c_name}" 2>/dev/null || true)
+
     # 1. Web UI Proxy (Host :host_port -> Container :8080)
-    if ! incus_cmd config device show "${c_name}" 2>/dev/null | grep -q "webui-proxy"; then
+    if ! echo "${dev_show}" | grep -q "webui-proxy"; then
         info "Adding 'webui-proxy' (Host 127.0.0.1:${host_port} -> Container 127.0.0.1:8080)..."
         if ! incus_cmd config device add "${c_name}" webui-proxy proxy listen=tcp:127.0.0.1:${host_port} connect=tcp:127.0.0.1:8080; then
             error "Failed to add 'webui-proxy' device on container '${c_name}'."
@@ -52,11 +55,23 @@ configure_proxy_devices() {
         fi
         success "'webui-proxy' device configured on port ${host_port}."
     else
-        success "'webui-proxy' device already configured."
+        # Verify existing webui-proxy matches requested host port
+        if echo "${dev_show}" | grep -A 5 "webui-proxy:" | grep -q "listen:.*:${host_port}"; then
+            success "'webui-proxy' device already configured on port ${host_port}."
+        elif echo "${dev_show}" | grep -q "webui-proxy" && ! echo "${dev_show}" | grep -q "webui-proxy:"; then
+            success "'webui-proxy' device already configured."
+        else
+            info "Updating 'webui-proxy' listen port to ${host_port}..."
+            if ! incus_cmd config device set "${c_name}" webui-proxy listen "tcp:127.0.0.1:${host_port}" 2>/dev/null; then
+                incus_cmd config device remove "${c_name}" webui-proxy 2>/dev/null || true
+                incus_cmd config device add "${c_name}" webui-proxy proxy listen=tcp:127.0.0.1:${host_port} connect=tcp:127.0.0.1:8080
+            fi
+            success "'webui-proxy' device updated to port ${host_port}."
+        fi
     fi
 
     # 2. Ollama Link Proxy
-    if ! incus_cmd config device show "${c_name}" 2>/dev/null | grep -q "ollama-link"; then
+    if ! echo "${dev_show}" | grep -q "ollama-link"; then
         info "Adding 'ollama-link' (Container 127.0.0.1:11434 -> Target ${ollama_target})..."
         if ! incus_cmd config device add "${c_name}" ollama-link proxy bind=instance listen=tcp:127.0.0.1:11434 connect="tcp:${ollama_target}"; then
             warn "Could not add 'ollama-link' proxy device automatically. Continuing..."
@@ -64,7 +79,19 @@ configure_proxy_devices() {
             success "'ollama-link' proxy device configured."
         fi
     else
-        success "'ollama-link' proxy device already configured."
+        # Verify existing ollama-link matches requested target
+        if echo "${dev_show}" | grep -A 5 "ollama-link:" | grep -q "connect:.*${ollama_target}"; then
+            success "'ollama-link' proxy device already configured for ${ollama_target}."
+        elif echo "${dev_show}" | grep -q "ollama-link" && ! echo "${dev_show}" | grep -q "ollama-link:"; then
+            success "'ollama-link' proxy device already configured."
+        else
+            info "Updating 'ollama-link' connect target to ${ollama_target}..."
+            if ! incus_cmd config device set "${c_name}" ollama-link connect "tcp:${ollama_target}" 2>/dev/null; then
+                incus_cmd config device remove "${c_name}" ollama-link 2>/dev/null || true
+                incus_cmd config device add "${c_name}" ollama-link proxy bind=instance listen=tcp:127.0.0.1:11434 connect="tcp:${ollama_target}" || true
+            fi
+            success "'ollama-link' proxy device updated to target ${ollama_target}."
+        fi
     fi
 
     return 0

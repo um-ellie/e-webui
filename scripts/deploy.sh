@@ -53,6 +53,7 @@ Operations:
   --status             Display container, release, service, Python runtime, and TTS health
   --repair             Audit and repair broken symlinks, venvs, service units, and TTS assets
   --uninstall          Remove services and configuration (preserves shared data by default)
+  -v, --version        Show version information and exit
   -h, --help           Show this help message and exit
 
 Options:
@@ -90,11 +91,24 @@ Exit Codes:
 EOF
 }
 
+validate_container_name() {
+    local name="$1"
+    if [[ ! "${name}" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
+        error "Invalid container name '${name}'. Container names must start with an alphanumeric character and contain only letters, numbers, hyphens, underscores, or dots."
+        return 2
+    fi
+    return 0
+}
+
 # Parse CLI arguments
 while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)
             show_help
+            exit 0
+            ;;
+        -v|--version)
+            echo "e-webui deployment lifecycle manager v1.0.0"
             exit 0
             ;;
         --release)
@@ -212,6 +226,9 @@ while [ $# -gt 0 ]; do
             exit 2
             ;;
         *)
+            if ! validate_container_name "$1"; then
+                exit 2
+            fi
             CONTAINER_NAME="$1"
             shift
             ;;
@@ -298,7 +315,8 @@ run_update() {
     active_rel=$(state_get_active_release "${CONTAINER_NAME}" "${APP_DIR}")
     info "Currently active release: ${active_rel:-none}"
 
-    # Ensure system prerequisites and directories (espeak-ng, interpreters, models) are satisfied
+    # Ensure proxy devices, system prerequisites, and directories are satisfied
+    configure_proxy_devices "${CONTAINER_NAME}" "${HOST_PORT}" "${OLLAMA_TARGET}"
     install_system_prerequisites "${CONTAINER_NAME}"
     setup_deployment_directories "${CONTAINER_NAME}" "${APP_DIR}"
 
