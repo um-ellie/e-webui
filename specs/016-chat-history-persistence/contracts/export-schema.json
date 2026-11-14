@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChatExportSchema",
+  "description": "JSON schema for exported e-webui conversation transcripts",
+  "type": "object",
+  "required": ["version", "exportedAt", "session"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1.0"]
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "session": {
+      "type": "object",
+      "required": ["id", "title", "createdAt", "updatedAt", "model", "messages"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" },
+        "model": { "type": "string" },
+        "systemPrompt": { "type": ["string", "null"] },
+        "messages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "role", "content", "status", "createdAt"],
+            "properties": {
+              "id": { "type": "string" },
+              "sessionId": { "type": "string" },
+              "role": { "type": "string", "enum": ["user", "assistant"] },
+              "content": { "type": "string" },
+              "reasoning": { "type": ["string", "null"] },
+              "status": { "type": "string", "enum": ["streaming", "completed", "stopped", "error"] },
+              "error": { "type": ["string", "null"] },
+              "errorStatus": { "type": ["integer", "null"] },
+              "metrics": {
+                "type": ["object", "null"],
+                "properties": {
+                  "model": { "type": "string" },
+                  "durationSeconds": { "type": "number" },
+                  "tokensPerSecond": { "type": ["number", "null"] },
+                  "evalCount": { "type": ["integer", "null"] }
+                }
+              },
+              "createdAt": { "type": "integer" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

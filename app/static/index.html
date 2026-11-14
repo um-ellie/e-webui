@@ -20,6 +20,7 @@
   <!-- Local Vendored Libraries -->
   <script src="/static/vendor/marked.min.js"></script>
   <script src="/static/vendor/dompurify.min.js"></script>
+  <script src="/static/vendor/prism.min.js"></script>
 </head>
 <body>
   <div class="app-layout">
@@ -107,6 +108,14 @@
         </div>
 
         <div class="header-right">
+          <!-- Container Health Status Pill & Popover Anchor -->
+          <div class="health-indicator-container">
+            <button class="health-indicator-btn" type="button" aria-label="Connection Diagnostics" aria-expanded="false" dir="ltr" title="Connection status">
+              <span class="health-dot status-connected"></span>
+              <span class="health-label">Connected</span>
+            </button>
+          </div>
+
           <button class="btn-icon btn-share" type="button" aria-label="Share conversation">
             <svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
           </button>
@@ -173,6 +182,86 @@
                 <svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
                 <span>Think</span>
               </button>
+
+              <!-- Model Parameters & Presets Pill and Popover -->
+              <div class="params-wrapper">
+                <button class="pill-toggle pill-params" id="btn-params-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Model parameters and presets" title="Model parameters and system prompt">
+                  <svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+                  <span class="params-label" id="params-label">Preset</span>
+                  <span class="param-badge-pill" id="params-active-badge">0.7</span>
+                </button>
+                <div class="params-popover" id="params-popover" role="dialog" aria-label="Model Parameters and Presets" hidden>
+                  <div class="params-header">
+                    <span class="params-title">Parameters & Persona</span>
+                    <button type="button" class="btn-icon btn-close-params" id="btn-close-params" aria-label="Close parameters">
+                      <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+
+                  <div class="params-body">
+                    <!-- Preset Selection -->
+                    <div class="params-field">
+                      <label for="param-preset-select" class="params-field-label">Persona Preset</label>
+                      <div class="params-preset-row">
+                        <select id="param-preset-select" class="params-select">
+                          <!-- Populated dynamically -->
+                        </select>
+                        <button type="button" class="btn-preset-action btn-save-preset" id="btn-save-custom-preset" title="Save current settings as new custom preset">Save</button>
+                        <button type="button" class="btn-preset-action btn-delete-preset" id="btn-delete-custom-preset" title="Delete custom preset" style="display:none">Delete</button>
+                      </div>
+                    </div>
+
+                    <!-- System Instructions Textarea -->
+                    <div class="params-field">
+                      <div class="params-label-row">
+                        <label for="param-system-prompt" class="params-field-label">System Instructions</label>
+                        <span class="params-char-count" id="param-char-count">0 / 10,000</span>
+                      </div>
+                      <textarea id="param-system-prompt" class="params-textarea" rows="3" maxlength="10000" placeholder="Instructions or persona directives for this conversation..."></textarea>
+                    </div>
+
+                    <!-- Quick Sampling Shortcuts -->
+                    <div class="params-field">
+                      <label class="params-field-label">Sampling Style</label>
+                      <div class="params-shortcuts">
+                        <button type="button" class="btn-chip" data-style="deterministic" title="Temperature 0.2, Top-P 0.8">Deterministic</button>
+                        <button type="button" class="btn-chip active" data-style="balanced" title="Temperature 0.7, Top-P 0.9">Balanced</button>
+                        <button type="button" class="btn-chip" data-style="creative" title="Temperature 1.2, Top-P 0.95">Creative</button>
+                      </div>
+                    </div>
+
+                    <!-- Sliders -->
+                    <div class="params-field">
+                      <div class="params-label-row">
+                        <label for="param-temperature" class="params-field-label">Temperature</label>
+                        <span class="param-val" id="param-temp-val">0.70</span>
+                      </div>
+                      <input type="range" id="param-temperature" min="0.0" max="2.0" step="0.05" value="0.7" class="param-slider">
+                    </div>
+
+                    <div class="params-field">
+                      <div class="params-label-row">
+                        <label for="param-topp" class="params-field-label">Top-P (Nucleus)</label>
+                        <span class="param-val" id="param-topp-val">0.90</span>
+                      </div>
+                      <input type="range" id="param-topp" min="0.0" max="1.0" step="0.05" value="0.9" class="param-slider">
+                    </div>
+
+                    <!-- Context Window -->
+                    <div class="params-field">
+                      <label for="param-num-ctx" class="params-field-label">Context Window</label>
+                      <select id="param-num-ctx" class="params-select">
+                        <option value="">Model Default</option>
+                        <option value="2048">2,048 tokens</option>
+                        <option value="4096" selected>4,096 tokens</option>
+                        <option value="8192">8,192 tokens</option>
+                        <option value="16384">16,384 tokens</option>
+                        <option value="32768">32,768 tokens</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               <div style="flex:1"></div>
 
@@ -246,6 +335,12 @@
               <option value="fa">فارسی (Persian - Prepared)</option>
             </select>
           </div>
+
+          <div class="settings-group data-management-group" style="margin-top:24px;border-top:1px solid var(--line);padding-top:16px">
+            <label class="settings-label" style="color:var(--danger)">Data Management</label>
+            <p style="font-size:12.5px;color:var(--mute);margin-bottom:10px">Permanently delete all stored conversations and reset your local workspace.</p>
+            <button id="btn-clear-all-chats" type="button" class="btn-danger" style="padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;cursor:pointer">Clear all conversations</button>
+          </div>
         </div>
 
         <!-- Appearance Tab -->
@@ -272,12 +367,16 @@
         <!-- Models Tab -->
         <div id="tab-models" class="tab-pane" style="display:none">
           <div class="settings-group">
-            <label for="setting-temperature" class="settings-label">Temperature</label>
-            <input id="setting-temperature" class="settings-select disabled" type="number" value="0.7" step="0.1" disabled>
+            <label for="setting-temperature" class="settings-label">Default Temperature (0.0 - 2.0)</label>
+            <input id="setting-temperature" class="settings-select" type="number" value="0.7" min="0.0" max="2.0" step="0.05">
           </div>
           <div class="settings-group">
-            <label for="setting-system-prompt" class="settings-label">System Prompt</label>
-            <textarea id="setting-system-prompt" class="settings-select disabled" rows="3" disabled placeholder="Custom system instructions not available yet"></textarea>
+            <label for="setting-topp" class="settings-label">Default Top-P (0.0 - 1.0)</label>
+            <input id="setting-topp" class="settings-select" type="number" value="0.9" min="0.0" max="1.0" step="0.05">
+          </div>
+          <div class="settings-group">
+            <label for="setting-system-prompt" class="settings-label">Default System Instructions</label>
+            <textarea id="setting-system-prompt" class="settings-select" rows="3" placeholder="Default instructions applied to new conversations..."></textarea>
           </div>
         </div>
 

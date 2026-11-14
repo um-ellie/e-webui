@@ -5,7 +5,9 @@ from pathlib import Path
 import unittest
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-CONTRACT_FILE = WORKSPACE_ROOT / "specs/013-chat-connection-refinements/contracts/ui-features.json"
+CONTRACT_FILE = WORKSPACE_ROOT / "specs/016-chat-history-persistence/contracts/ui-features.json"
+if not CONTRACT_FILE.exists():
+    CONTRACT_FILE = WORKSPACE_ROOT / "specs/013-chat-connection-refinements/contracts/ui-features.json"
 FEATURES_JS_FILE = WORKSPACE_ROOT / "app/static/js/features.js"
 
 
@@ -27,6 +29,7 @@ class TestUIContracts(unittest.TestCase):
         self.assertEqual(default_controls["chat.stop"]["status"], "enabled")
         self.assertEqual(default_controls["chat.model_select"]["status"], "enabled")
         self.assertEqual(default_controls["session.new"]["status"], "enabled")
+        self.assertEqual(default_controls["chat.export"]["status"], "enabled")
 
         # Check key future controls have disabled status and reason
         future_controls = [
@@ -34,7 +37,6 @@ class TestUIContracts(unittest.TestCase):
             "chat.manage_models",
             "chat.attach_file",
             "chat.tools_menu",
-            "chat.export",
             "session.pin",
             "nav.library"
         ]
@@ -136,6 +138,14 @@ class TestUIContracts(unittest.TestCase):
         self.assertIn(".btn-tts", content)
         self.assertIn(".btn-tts.loading", content)
         self.assertIn(".btn-tts.playing", content)
+
+    def test_model_presets_and_parameters_enabled(self):
+        """Verify that model.temperature_tune and model.system_prompt are enabled in features.js."""
+        with open(FEATURES_JS_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("'model.temperature_tune': { status: 'enabled' }", content)
+        self.assertIn("'model.system_prompt': { status: 'enabled' }", content)
 
 
 if __name__ == "__main__":

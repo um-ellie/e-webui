@@ -6,6 +6,7 @@
 
 import { themeManager } from '../theme.js';
 import { bindFeatureControl } from '../features.js';
+import { store } from '../store.js';
 
 export class SettingsDialog {
   constructor(backdropElement) {
@@ -27,7 +28,25 @@ export class SettingsDialog {
     this.setupTabs();
     this.setupClose();
     this.setupAppearanceSettings();
+    this.setupModelsSettings();
+    this.setupDataManagement();
     this.bindRegistryControls();
+  }
+
+  setupDataManagement() {
+    const btnClearAll = this.backdrop.querySelector('#btn-clear-all-chats');
+    if (btnClearAll) {
+      btnClearAll.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to permanently delete all conversations? This cannot be undone.')) {
+          try {
+            await store.clearAllSessions();
+            this.close();
+          } catch (err) {
+            console.error('Failed to clear sessions:', err);
+          }
+        }
+      });
+    }
   }
 
   bindRegistryControls() {
@@ -104,6 +123,61 @@ export class SettingsDialog {
         }
       });
     }
+  }
+
+  setupModelsSettings() {
+    const tempInput = this.backdrop.querySelector('#setting-temperature');
+    const toppInput = this.backdrop.querySelector('#setting-topp');
+    const sysPromptInput = this.backdrop.querySelector('#setting-system-prompt');
+
+    const syncFromActiveSession = () => {
+      const active = store.getActiveSession();
+      if (active) {
+        if (tempInput) tempInput.value = typeof active.temperature === 'number' ? active.temperature : 0.7;
+        if (toppInput) toppInput.value = typeof active.topP === 'number' ? active.topP : 0.9;
+        if (sysPromptInput) sysPromptInput.value = active.systemPrompt || '';
+      }
+    };
+
+    if (tempInput) {
+      tempInput.addEventListener('change', () => {
+        const val = parseFloat(tempInput.value);
+        if (!isNaN(val)) {
+          const clamped = Math.min(Math.max(val, 0.0), 2.0);
+          tempInput.value = clamped;
+          const active = store.getActiveSession();
+          if (active) {
+            store.updateSession(active.id, { temperature: clamped });
+          }
+        }
+      });
+    }
+
+    if (toppInput) {
+      toppInput.addEventListener('change', () => {
+        const val = parseFloat(toppInput.value);
+        if (!isNaN(val)) {
+          const clamped = Math.min(Math.max(val, 0.0), 1.0);
+          toppInput.value = clamped;
+          const active = store.getActiveSession();
+          if (active) {
+            store.updateSession(active.id, { topP: clamped });
+          }
+        }
+      });
+    }
+
+    if (sysPromptInput) {
+      sysPromptInput.addEventListener('change', () => {
+        const active = store.getActiveSession();
+        if (active) {
+          store.updateSession(active.id, { systemPrompt: sysPromptInput.value.trim() });
+        }
+      });
+    }
+
+    store.on('session:active-changed', syncFromActiveSession);
+    syncFromActiveSession();
   }
 
   isOpen() {

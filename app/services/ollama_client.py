@@ -2,7 +2,8 @@
 
 import json
 import logging
-from typing import AsyncGenerator, Dict, Any, List, Optional
+import time
+from typing import AsyncGenerator, Dict, Any, List, Optional, Tuple
 import httpx
 
 from app.config import OLLAMA_HOST
@@ -23,6 +24,7 @@ class OllamaClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = http_client
+        self.last_latency_ms: Optional[float] = None
 
     def get_http_client(self) -> httpx.AsyncClient:
         """Returns the active shared HTTP client, creating one if not present."""
@@ -42,18 +44,50 @@ class OllamaClient:
             self._client = None
 
     async def check_health(self) -> bool:
-        """Checks if Ollama service is reachable and responding using fast root liveness ping."""
+        """Checks if Ollama service is reachable and responding."""
+        connected, _ = await self.check_health_detailed()
+        return connected
+
+    async def check_health_detailed(self) -> Tuple[bool, Optional[float]]:
+        """Checks if Ollama service is reachable and returns (connected, latency_ms)."""
+        start = time.monotonic()
         try:
             client = self.get_http_client()
             res = await client.get(f"{self.base_url}/")
             if res.status_code == 200:
-                return True
+                latency_ms = round((time.monotonic() - start) * 1000, 1)
+                self.last_latency_ms = latency_ms
+                return True, latency_ms
             # Fallback to /api/tags if an upstream proxy restricts to /api
             res = await client.get(f"{self.base_url}/api/tags")
-            return res.status_code == 200
+            if res.status_code == 200:
+                latency_ms = round((time.monotonic() - start) * 1000, 1)
+                self.last_latency_ms = latency_ms
+                return True, latency_ms
+            self.last_latency_ms = None
+            return False, None
         except Exception as exc:
             logger.warning(f"Ollama health check failed: {exc}")
-            return False
+            self.last_latency_ms = None
+            return False, None
+
+    async def get_loaded_models(self) -> List[str]:
+        """Discovers models currently loaded in memory via Ollama's /api/ps endpoint."""
+        try:
+            client = self.get_http_client()
+            res = await client.get(f"{self.base_url}/api/ps")
+            if res.status_code == 200:
+                data = res.json()
+                models = [
+                    m.get("name") or m.get("model", "")
+                    for m in data.get("models", [])
+                    if (m.get("name") or m.get("model"))
+                ]
+                return models
+            return []
+        except Exception as exc:
+            logger.debug(f"Could not query /api/ps: {exc}")
+            return []
 
     async def get_models(self) -> ModelListResponse:
         """Retrieves and normalizes available models from Ollama."""
@@ -115,13 +149,19 @@ class OllamaClient:
         else:
             prompt_payload = req.prompt
 
+        options: Dict[str, Any] = {
+            "temperature": req.temperature,
+        }
+        if req.top_p is not None:
+            options["top_p"] = req.top_p
+        if req.num_ctx is not None:
+            options["num_ctx"] = req.num_ctx
+
         payload: Dict[str, Any] = {
             "model": req.model,
             "prompt": prompt_payload,
             "stream": True,
-            "options": {
-                "temperature": req.temperature,
-            },
+            "options": options,
         }
         if not req.thinking:
             payload["think"] = False
@@ -191,6 +231,10 @@ class OllamaClient:
                             done=done,
                             status="completed" if done else "streaming",
                             eval_count=parsed.get("eval_count"),
+                            eval_duration=parsed.get("eval_duration"),
+                            prompt_eval_count=parsed.get("prompt_eval_count"),
+                            prompt_eval_duration=parsed.get("prompt_eval_duration"),
+                            load_duration=parsed.get("load_duration"),
                             total_duration=parsed.get("total_duration"),
                         )
                         yield f"data: {chunk.model_dump_json()}\n\n"

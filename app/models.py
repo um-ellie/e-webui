@@ -39,6 +39,18 @@ class PromptRequest(BaseModel):
         le=2.0,
         description="Sampling temperature between 0.0 and 2.0",
     )
+    top_p: Optional[float] = Field(
+        default=0.9,
+        ge=0.0,
+        le=1.0,
+        description="Nucleus sampling top_p between 0.0 and 1.0",
+    )
+    num_ctx: Optional[int] = Field(
+        default=None,
+        ge=512,
+        le=131072,
+        description="Context window token size between 512 and 131072",
+    )
 
 
 class StreamChunk(BaseModel):
@@ -54,6 +66,18 @@ class StreamChunk(BaseModel):
     )
     eval_count: Optional[int] = Field(
         default=None, description="Total tokens evaluated"
+    )
+    eval_duration: Optional[int] = Field(
+        default=None, description="Duration in nanoseconds spent generating completion tokens"
+    )
+    prompt_eval_count: Optional[int] = Field(
+        default=None, description="Number of tokens in the input prompt context"
+    )
+    prompt_eval_duration: Optional[int] = Field(
+        default=None, description="Duration in nanoseconds spent evaluating prompt tokens"
+    )
+    load_duration: Optional[int] = Field(
+        default=None, description="Duration in nanoseconds spent loading the model into memory"
     )
     total_duration: Optional[int] = Field(
         default=None, description="Total duration in nanoseconds"
@@ -87,11 +111,17 @@ class ModelListResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """Liveness probe response."""
+    """Liveness probe response with latency and container diagnostics."""
 
     status: str = "ok"
     ollama_connected: bool = False
     ollama_url: str
+    latency_ms: Optional[float] = Field(
+        default=None, description="Round-trip ping time to Ollama container in milliseconds"
+    )
+    loaded_models: List[str] = Field(
+        default_factory=list, description="Currently loaded models resident in memory"
+    )
 
 
 class TTSRequest(BaseModel):

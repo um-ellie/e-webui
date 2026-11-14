@@ -13,8 +13,16 @@ import { EmptyState } from './components/empty.js';
 import { SettingsDialog } from './components/settings.js';
 import { setupKeyboardShortcuts } from './shortcuts.js';
 import { ttsController } from './tts.js';
+import { api } from './api.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // 0. Initialize persistent storage and hydrate store
+  try {
+    await store.init();
+  } catch (err) {
+    console.error('Store initialization error:', err);
+  }
+
   // 1. Initialize Settings Dialog
   const settingsBackdrop = document.getElementById('settings-modal');
   const settingsDialog = settingsBackdrop ? new SettingsDialog(settingsBackdrop) : null;
@@ -23,9 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const sidebarContainer = document.querySelector('.sidebar');
   const sidebar = sidebarContainer ? new Sidebar(sidebarContainer) : null;
 
-  // 3. Initialize Header
+  // 3. Initialize Header & Health Polling
   const headerContainer = document.querySelector('.top-header');
   const header = headerContainer ? new Header(headerContainer) : null;
+  store.startHealthPolling(() => api.checkHealth(), 30000);
 
   // 4. Initialize Chat View
   const chatContainer = document.querySelector('.reading-column .messages-list');

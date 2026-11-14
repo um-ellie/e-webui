@@ -7,6 +7,7 @@
 import { store } from '../store.js';
 import { api } from '../api.js';
 import { bindFeatureControl } from '../features.js';
+import { presetsService } from '../presets.js';
 
 function escapeHtml(text) {
   return String(text || '')
@@ -344,6 +345,392 @@ export class ModelPicker {
   }
 }
 
+export class ParametersController {
+  constructor(container) {
+    this.container = container;
+    this.toggleBtn = container.querySelector('#btn-params-toggle');
+    this.popover = container.querySelector('#params-popover');
+    this.closeBtn = container.querySelector('#btn-close-params');
+    this.presetSelect = container.querySelector('#param-preset-select');
+    this.saveBtn = container.querySelector('#btn-save-custom-preset');
+    this.deleteBtn = container.querySelector('#btn-delete-custom-preset');
+    this.systemPromptEl = container.querySelector('#param-system-prompt');
+    this.charCountEl = container.querySelector('#param-char-count');
+    this.tempSlider = container.querySelector('#param-temperature');
+    this.tempVal = container.querySelector('#param-temp-val');
+    this.toppSlider = container.querySelector('#param-topp');
+    this.toppVal = container.querySelector('#param-topp-val');
+    this.numCtxSelect = container.querySelector('#param-num-ctx');
+    this.shortcutBtns = container.querySelectorAll('.btn-chip[data-style]');
+    this.activeBadge = container.querySelector('#params-active-badge');
+    this.labelEl = container.querySelector('#params-label');
+
+    this.presets = [];
+    this.currentPresetId = null;
+
+    this.init();
+  }
+
+  async init() {
+    this.setupListeners();
+    await this.loadPresets();
+
+    store.on('session:active-changed', (session) => {
+      this.syncFromSession(session);
+    });
+
+    store.on('session:updated', (session) => {
+      if (session && session.id === store.activeSessionId) {
+        this.syncFromSession(session);
+      }
+    });
+
+    const currentSession = store.getActiveSession();
+    if (currentSession) {
+      this.syncFromSession(currentSession);
+    }
+  }
+
+  async loadPresets() {
+    if (!this.presetSelect) return;
+    this.presets = await presetsService.getAllPresets();
+
+    const builtIns = this.presets.filter((p) => p.isBuiltIn);
+    const customs = this.presets.filter((p) => !p.isBuiltIn);
+
+    const parts = [];
+    parts.push('<optgroup label="Built-in Presets">');
+    for (const p of builtIns) {
+      parts.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`);
+    }
+    parts.push('</optgroup>');
+
+    if (customs.length > 0) {
+      parts.push('<optgroup label="Custom Presets">');
+      for (const p of customs) {
+        parts.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.title)}</option>`);
+      }
+      parts.push('</optgroup>');
+    }
+
+    parts.push('<option value="__custom__">— Custom Instructions —</option>');
+    this.presetSelect.innerHTML = parts.join('');
+  }
+
+  setupListeners() {
+    if (this.toggleBtn) {
+      this.toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggle();
+      });
+    }
+
+    if (this.closeBtn) {
+      this.closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.close();
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (this.popover && !this.popover.hidden) {
+        if (!this.popover.contains(e.target) && !this.toggleBtn.contains(e.target)) {
+          this.close();
+        }
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.popover && !this.popover.hidden) {
+        e.preventDefault();
+        this.close();
+        if (this.toggleBtn) this.toggleBtn.focus();
+      }
+    });
+
+    if (this.presetSelect) {
+      this.presetSelect.addEventListener('change', async () => {
+        const selectedId = this.presetSelect.value;
+        if (selectedId === '__custom__') {
+          this.currentPresetId = null;
+          if (this.deleteBtn) this.deleteBtn.style.display = 'none';
+          const session = store.getActiveSession();
+          if (session) {
+            store.updateSession(session.id, { presetId: null });
+          }
+          this.updateActiveBadge();
+          return;
+        }
+
+        const preset = this.presets.find((p) => p.id === selectedId);
+        if (preset) {
+          this.applyPreset(preset);
+        }
+      });
+    }
+
+    if (this.systemPromptEl) {
+      this.systemPromptEl.addEventListener('input', () => {
+        this.updateCharCount();
+        const session = store.getActiveSession();
+        if (session) {
+          store.updateSession(session.id, { systemPrompt: this.systemPromptEl.value });
+        }
+        this.updateActiveBadge();
+      });
+    }
+
+    if (this.tempSlider) {
+      this.tempSlider.addEventListener('input', () => {
+        const val = parseFloat(this.tempSlider.value);
+        if (this.tempVal) this.tempVal.textContent = val.toFixed(2);
+        this.updateActiveBadge();
+        this.syncShortcutHighlight();
+        const session = store.getActiveSession();
+        if (session) {
+          store.updateSession(session.id, { temperature: val });
+        }
+      });
+    }
+
+    if (this.toppSlider) {
+      this.toppSlider.addEventListener('input', () => {
+        const val = parseFloat(this.toppSlider.value);
+        if (this.toppVal) this.toppVal.textContent = val.toFixed(2);
+        this.syncShortcutHighlight();
+        const session = store.getActiveSession();
+        if (session) {
+          store.updateSession(session.id, { topP: val });
+        }
+      });
+    }
+
+    if (this.numCtxSelect) {
+      this.numCtxSelect.addEventListener('change', () => {
+        const val = this.numCtxSelect.value ? parseInt(this.numCtxSelect.value, 10) : null;
+        const session = store.getActiveSession();
+        if (session) {
+          store.updateSession(session.id, { numCtx: val });
+        }
+      });
+    }
+
+    this.shortcutBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const style = btn.getAttribute('data-style');
+        if (style === 'deterministic') {
+          this.setSampling(0.2, 0.8);
+        } else if (style === 'balanced') {
+          this.setSampling(0.7, 0.9);
+        } else if (style === 'creative') {
+          this.setSampling(1.2, 0.95);
+        }
+      });
+    });
+
+    if (this.saveBtn) {
+      this.saveBtn.addEventListener('click', async () => {
+        const defaultName = (this.systemPromptEl?.value || '').trim().slice(0, 24) || 'Custom Persona';
+        const title = window.prompt('Enter a title for this preset:', defaultName);
+        if (title && title.trim()) {
+          try {
+            const saved = await presetsService.saveCustomPreset({
+              title: title.trim(),
+              systemPrompt: this.systemPromptEl.value.trim() || 'You are a helpful assistant.',
+              defaultTemperature: parseFloat(this.tempSlider.value),
+              defaultTopP: parseFloat(this.toppSlider.value),
+              defaultNumCtx: this.numCtxSelect.value ? parseInt(this.numCtxSelect.value, 10) : null
+            });
+            await this.loadPresets();
+            this.applyPreset(saved);
+            showToast(`Preset "${saved.title}" saved`);
+          } catch (err) {
+            showToast(err.message || 'Failed to save preset');
+          }
+        }
+      });
+    }
+
+    if (this.deleteBtn) {
+      this.deleteBtn.addEventListener('click', async () => {
+        if (!this.currentPresetId) return;
+        const preset = this.presets.find((p) => p.id === this.currentPresetId);
+        if (!preset || preset.isBuiltIn) return;
+
+        if (window.confirm(`Delete preset "${preset.title}"?`)) {
+          try {
+            await presetsService.deleteCustomPreset(preset.id);
+            await this.loadPresets();
+            const fallback = this.presets[0];
+            if (fallback) {
+              this.applyPreset(fallback);
+            }
+            showToast('Preset deleted');
+          } catch (err) {
+            showToast(err.message || 'Failed to delete preset');
+          }
+        }
+      });
+    }
+  }
+
+  setSampling(temperature, topP) {
+    if (this.tempSlider) {
+      this.tempSlider.value = temperature;
+      if (this.tempVal) this.tempVal.textContent = temperature.toFixed(2);
+    }
+    if (this.toppSlider) {
+      this.toppSlider.value = topP;
+      if (this.toppVal) this.toppVal.textContent = topP.toFixed(2);
+    }
+    this.updateActiveBadge();
+    this.syncShortcutHighlight();
+
+    const session = store.getActiveSession();
+    if (session) {
+      store.updateSession(session.id, { temperature, topP });
+    }
+  }
+
+  applyPreset(preset) {
+    this.currentPresetId = preset.id;
+    if (this.presetSelect) this.presetSelect.value = preset.id;
+    if (this.systemPromptEl) this.systemPromptEl.value = preset.systemPrompt || '';
+    this.updateCharCount();
+
+    if (typeof preset.defaultTemperature === 'number' && this.tempSlider) {
+      this.tempSlider.value = preset.defaultTemperature;
+      if (this.tempVal) this.tempVal.textContent = preset.defaultTemperature.toFixed(2);
+    }
+    if (typeof preset.defaultTopP === 'number' && this.toppSlider) {
+      this.toppSlider.value = preset.defaultTopP;
+      if (this.toppVal) this.toppVal.textContent = preset.defaultTopP.toFixed(2);
+    }
+    if (preset.defaultNumCtx && this.numCtxSelect) {
+      this.numCtxSelect.value = String(preset.defaultNumCtx);
+    }
+
+    if (this.deleteBtn) {
+      this.deleteBtn.style.display = preset.isBuiltIn ? 'none' : 'inline-block';
+    }
+
+    this.updateActiveBadge();
+    this.syncShortcutHighlight();
+
+    const session = store.getActiveSession();
+    if (session) {
+      store.updateSession(session.id, {
+        presetId: preset.id,
+        systemPrompt: preset.systemPrompt,
+        temperature: typeof preset.defaultTemperature === 'number' ? preset.defaultTemperature : session.temperature,
+        topP: typeof preset.defaultTopP === 'number' ? preset.defaultTopP : session.topP,
+        numCtx: preset.defaultNumCtx || session.numCtx
+      });
+    }
+  }
+
+  syncFromSession(session) {
+    if (!session) return;
+
+    if (this.tempSlider) {
+      this.tempSlider.value = typeof session.temperature === 'number' ? session.temperature : 0.7;
+      if (this.tempVal) this.tempVal.textContent = Number(this.tempSlider.value).toFixed(2);
+    }
+    if (this.toppSlider) {
+      this.toppSlider.value = typeof session.topP === 'number' ? session.topP : 0.9;
+      if (this.toppVal) this.toppVal.textContent = Number(this.toppSlider.value).toFixed(2);
+    }
+    if (this.numCtxSelect) {
+      this.numCtxSelect.value = session.numCtx ? String(session.numCtx) : '';
+    }
+    if (this.systemPromptEl) {
+      this.systemPromptEl.value = session.systemPrompt || '';
+      this.updateCharCount();
+    }
+
+    if (session.presetId) {
+      this.currentPresetId = session.presetId;
+      if (this.presetSelect) this.presetSelect.value = session.presetId;
+      const preset = this.presets.find((p) => p.id === session.presetId);
+      if (this.deleteBtn) {
+        this.deleteBtn.style.display = (preset && !preset.isBuiltIn) ? 'inline-block' : 'none';
+      }
+    } else {
+      this.currentPresetId = null;
+      if (this.presetSelect) this.presetSelect.value = session.systemPrompt ? '__custom__' : (this.presets[0]?.id || '');
+      if (this.deleteBtn) this.deleteBtn.style.display = 'none';
+    }
+
+    this.updateActiveBadge();
+    this.syncShortcutHighlight();
+  }
+
+  updateCharCount() {
+    if (!this.charCountEl || !this.systemPromptEl) return;
+    const len = this.systemPromptEl.value.length;
+    this.charCountEl.textContent = `${len.toLocaleString()} / 10,000`;
+  }
+
+  updateActiveBadge() {
+    if (this.activeBadge && this.tempSlider) {
+      this.activeBadge.textContent = parseFloat(this.tempSlider.value).toFixed(1);
+    }
+    if (this.labelEl) {
+      if (this.currentPresetId) {
+        const preset = this.presets.find((p) => p.id === this.currentPresetId);
+        this.labelEl.textContent = preset ? preset.title : 'Preset';
+      } else if (this.systemPromptEl && this.systemPromptEl.value.trim()) {
+        this.labelEl.textContent = 'Custom';
+      } else {
+        this.labelEl.textContent = 'Preset';
+      }
+    }
+  }
+
+  syncShortcutHighlight() {
+    if (!this.tempSlider || !this.toppSlider) return;
+    const temp = parseFloat(this.tempSlider.value);
+    const topp = parseFloat(this.toppSlider.value);
+
+    this.shortcutBtns.forEach((btn) => {
+      const style = btn.getAttribute('data-style');
+      let active = false;
+      if (style === 'deterministic' && Math.abs(temp - 0.2) < 0.05 && Math.abs(topp - 0.8) < 0.05) {
+        active = true;
+      } else if (style === 'balanced' && Math.abs(temp - 0.7) < 0.05 && Math.abs(topp - 0.9) < 0.05) {
+        active = true;
+      } else if (style === 'creative' && Math.abs(temp - 1.2) < 0.05 && Math.abs(topp - 0.95) < 0.05) {
+        active = true;
+      }
+      btn.classList.toggle('active', active);
+    });
+  }
+
+  toggle() {
+    if (this.popover) {
+      if (this.popover.hidden) {
+        this.open();
+      } else {
+        this.close();
+      }
+    }
+  }
+
+  open() {
+    if (this.popover) {
+      this.popover.hidden = false;
+      if (this.toggleBtn) this.toggleBtn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  close() {
+    if (this.popover) {
+      this.popover.hidden = true;
+      if (this.toggleBtn) this.toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  }
+}
+
 export class Composer {
   constructor(container) {
     this.container = container;
@@ -356,6 +743,7 @@ export class Composer {
     this.dropOverlay = container.querySelector('.drop-overlay');
 
     this.modelPicker = new ModelPicker(container);
+    this.parametersController = new ParametersController(container);
 
     this.thinkingEnabled = true;
     this.isGenerating = false;
@@ -374,6 +762,11 @@ export class Composer {
     this.updateSendButtonState();
 
     // Listen to external events
+    window.addEventListener('storage:warning', (e) => {
+      const msg = (e.detail && e.detail.message) ? e.detail.message : 'Storage limit reached';
+      showToast(msg, 5000);
+    });
+
     store.on('composer:set-prompt', ({ prompt }) => {
       this.setPrompt(prompt);
     });
@@ -385,10 +778,7 @@ export class Composer {
     store.on('composer:retry', ({ prompt, failedMessageId }) => {
       const session = store.getActiveSession();
       if (session && failedMessageId) {
-        const idx = session.messages.findIndex((m) => m.id === failedMessageId);
-        if (idx !== -1) {
-          session.messages.splice(idx, 1);
-        }
+        store.deleteMessage(session.id, failedMessageId);
       }
       this.sendPrompt(prompt, true);
     });
@@ -543,46 +933,61 @@ export class Composer {
     let accumulatedThinking = '';
 
     try {
+      const systemPrompt = session.systemPrompt || null;
+      const temperature = typeof session.temperature === 'number' ? session.temperature : 0.7;
+      const topP = typeof session.topP === 'number' ? session.topP : 0.9;
+      const numCtx = typeof session.numCtx === 'number' ? session.numCtx : undefined;
+
       await api.streamGenerate(
         {
           model: modelToUse,
           prompt: promptText,
           history,
+          system: systemPrompt,
+          temperature,
+          top_p: topP,
+          num_ctx: numCtx,
           stream: true,
           thinking: this.thinkingEnabled
         },
         {
           signal: this.abortController.signal,
-          onToken: (token) => {
+          onToken: (token, liveMetrics) => {
             accumulatedContent += token;
             store.updateMessage(session.id, assistantMsg.id, {
               content: accumulatedContent,
-              status: 'streaming'
+              status: 'streaming',
+              liveMetrics
             });
           },
-          onThinking: (chunk) => {
+          onThinking: (chunk, liveMetrics) => {
             accumulatedThinking += chunk;
             store.updateMessage(session.id, assistantMsg.id, {
               reasoning: accumulatedThinking,
-              status: 'streaming'
+              status: 'streaming',
+              liveMetrics
             });
           },
           onDone: (metrics) => {
-            const durationSec = ((performance.now() - startTime) / 1000).toFixed(1);
-            let tps = null;
-            if (metrics && metrics.eval_count && metrics.total_duration) {
-              const durSec = metrics.total_duration / 1e9;
-              tps = durSec > 0 ? (metrics.eval_count / durSec).toFixed(1) : null;
-            }
+            const durationSec = metrics?.durationSeconds ?? parseFloat(((performance.now() - startTime) / 1000).toFixed(1));
+            const tps = metrics?.tokensPerSecond ?? null;
 
             store.updateMessage(session.id, assistantMsg.id, {
               content: accumulatedContent,
               reasoning: accumulatedThinking || null,
               status: 'completed',
+              liveMetrics: null,
               metrics: {
                 model: modelToUse,
-                durationSeconds: parseFloat(durationSec),
-                tokensPerSecond: tps ? parseFloat(tps) : null
+                durationSeconds: durationSec,
+                tokensPerSecond: tps,
+                timeToFirstTokenMs: metrics?.timeToFirstTokenMs ?? null,
+                evalCount: metrics?.eval_count ?? null,
+                evalDurationMs: metrics?.eval_duration ? Math.round(metrics.eval_duration / 1e6) : null,
+                promptEvalCount: metrics?.prompt_eval_count ?? null,
+                promptEvalDurationMs: metrics?.prompt_eval_duration ? Math.round(metrics.prompt_eval_duration / 1e6) : null,
+                promptEvalTokensPerSecond: metrics?.prompt_eval_speed ?? null,
+                loadDurationMs: metrics?.load_duration ? Math.round(metrics.load_duration / 1e6) : null
               }
             });
           },

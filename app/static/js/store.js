@@ -1,8 +1,11 @@
 /**
- * In-Memory ChatStore
- * Manages conversation sessions, active message turns, and dispatches observable events.
- * Contract: specs/012-chat-ui-redesign/data-model.md
+ * Persistent ChatStore
+ * Manages conversation sessions, active message turns, observable events,
+ * and asynchronous persistence via StorageService.
+ * Contract: specs/016-chat-history-persistence/contracts/storage-contract.md
  */
+
+import { storageService } from './storage.js';
 
 export class EventEmitter {
   constructor() {
@@ -43,6 +46,125 @@ export class ChatStore extends EventEmitter {
     this.sessions = new Map();
     this.activeSessionId = null;
     this.defaultModel = '';
+    this._saveDebounceTimers = new Map();
+    this.isHydrated = false;
+
+    /** @type {{ status: 'connected'|'degraded'|'disconnected', latencyMs: number|null, ollamaUrl: string, checkedAt: number, loadedModels: string[], errorMessage: string|null }} */
+    this.connectionHealth = {
+      status: 'connected',
+      latencyMs: null,
+      ollamaUrl: '',
+      checkedAt: 0,
+      loadedModels: [],
+      errorMessage: null
+    };
+    this._healthPollTimer = null;
+  }
+
+  setConnectionHealth(snapshot) {
+    this.connectionHealth = { ...this.connectionHealth, ...snapshot, checkedAt: Date.now() };
+    this.emit('connection:health-changed', this.connectionHealth);
+  }
+
+  getConnectionHealth() {
+    return this.connectionHealth;
+  }
+
+  startHealthPolling(probeFn, intervalMs = 30000) {
+    this.stopHealthPolling();
+    const runProbe = async () => {
+      try {
+        const result = await probeFn();
+        this.setConnectionHealth({
+          status: result.status,
+          latencyMs: result.latency_ms,
+          ollamaUrl: result.ollama_url,
+          loadedModels: result.loaded_models || [],
+          errorMessage: result.error
+        });
+      } catch (err) {
+        this.setConnectionHealth({
+          status: 'disconnected',
+          latencyMs: null,
+          ollamaUrl: '',
+          loadedModels: [],
+          errorMessage: err.message || 'Health probe failed'
+        });
+      }
+    };
+
+    runProbe();
+    this._healthPollTimer = setInterval(runProbe, intervalMs);
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          if (this._healthPollTimer) {
+            clearInterval(this._healthPollTimer);
+            this._healthPollTimer = null;
+          }
+        } else {
+          runProbe();
+          if (!this._healthPollTimer) {
+            this._healthPollTimer = setInterval(runProbe, intervalMs);
+          }
+        }
+      });
+    }
+  }
+
+  stopHealthPolling() {
+    if (this._healthPollTimer) {
+      clearInterval(this._healthPollTimer);
+      this._healthPollTimer = null;
+    }
+  }
+
+  /**
+   * Initializes the persistent storage layer and hydrates saved conversations.
+   * @returns {Promise<void>}
+   */
+  async init() {
+    if (this.isHydrated) return;
+
+    try {
+      await storageService.init();
+      const savedSessions = await storageService.loadAllSessions();
+
+      if (savedSessions && savedSessions.length > 0) {
+        this.sessions.clear();
+        for (const s of savedSessions) {
+          if (s.systemPrompt === undefined) s.systemPrompt = null;
+          if (s.presetId === undefined) s.presetId = null;
+          if (s.temperature === undefined) s.temperature = 0.7;
+          if (s.topP === undefined) s.topP = 0.9;
+          if (s.numCtx === undefined) s.numCtx = null;
+          this.sessions.set(s.id, s);
+        }
+
+        const savedActiveId = await storageService.getActiveSessionId();
+        if (savedActiveId && this.sessions.has(savedActiveId)) {
+          this.activeSessionId = savedActiveId;
+        } else {
+          this.activeSessionId = savedSessions[0].id;
+        }
+      } else {
+        this.createSession();
+      }
+
+      this.isHydrated = true;
+      const active = this.getActiveSession();
+      this.emit('store:hydrated', { activeSession: active, sessions: this.listSessions() });
+      if (active) {
+        this.emit('session:active-changed', active);
+      }
+    } catch (err) {
+      console.error('Failed to hydrate ChatStore from storage:', err);
+      if (this.sessions.size === 0) {
+        this.createSession();
+      }
+      this.isHydrated = true;
+    }
   }
 
   /**
@@ -65,11 +187,12 @@ export class ChatStore extends EventEmitter {
     if (active && (!active.model || active.model === '')) {
       active.model = modelName;
       this.emit('session:updated', active);
+      storageService.saveSession(active).catch(() => {});
     }
   }
 
   /**
-   * Creates a new chat session
+   * Creates a new chat session and commits it to persistent storage.
    * @param {string} [title="New conversation"]
    * @param {string} [model]
    * @returns {ChatSession}
@@ -89,11 +212,22 @@ export class ChatStore extends EventEmitter {
       createdAt: now,
       updatedAt: now,
       model: model || savedModel || this.defaultModel || '',
+      systemPrompt: null,
+      presetId: null,
+      temperature: 0.7,
+      topP: 0.9,
+      numCtx: null,
       messages: []
     };
 
     this.sessions.set(session.id, session);
     this.activeSessionId = session.id;
+
+    // Asynchronously commit to storage
+    storageService.saveSession(session).catch((err) => {
+      console.warn('Failed to persist new session:', err);
+    });
+    storageService.setActiveSessionId(session.id).catch(() => {});
 
     this.emit('session:created', session);
     this.emit('session:active-changed', session);
@@ -115,24 +249,30 @@ export class ChatStore extends EventEmitter {
    */
   getActiveSession() {
     if (!this.activeSessionId || !this.sessions.has(this.activeSessionId)) {
+      if (this.sessions.size > 0) {
+        const first = this.listSessions()[0];
+        this.activeSessionId = first.id;
+        return first;
+      }
       return this.createSession();
     }
     return this.sessions.get(this.activeSessionId);
   }
 
   /**
-   * Sets active session by ID
+   * Sets active session by ID and persists preference.
    * @param {string} id
    */
   setActiveSession(id) {
     if (this.sessions.has(id)) {
       this.activeSessionId = id;
+      storageService.setActiveSessionId(id).catch(() => {});
       this.emit('session:active-changed', this.sessions.get(id));
     }
   }
 
   /**
-   * Updates a session's properties
+   * Updates a session's properties and persists changes.
    * @param {string} id
    * @param {Partial<ChatSession>} updates
    */
@@ -146,24 +286,47 @@ export class ChatStore extends EventEmitter {
     if (updates.model !== undefined) {
       session.model = updates.model;
     }
+    if (updates.systemPrompt !== undefined) {
+      session.systemPrompt = updates.systemPrompt;
+    }
+    if (updates.presetId !== undefined) {
+      session.presetId = updates.presetId;
+    }
+    if (updates.temperature !== undefined) {
+      session.temperature = updates.temperature;
+    }
+    if (updates.topP !== undefined) {
+      session.topP = updates.topP;
+    }
+    if (updates.numCtx !== undefined) {
+      session.numCtx = updates.numCtx;
+    }
     session.updatedAt = Date.now();
+
+    storageService.saveSession(session).catch((err) => {
+      console.warn('Failed to persist session update:', err);
+    });
 
     this.emit('session:updated', session);
     return session;
   }
 
   /**
-   * Deletes a session by ID
+   * Deletes a session by ID and removes it from storage.
    * @param {string} id
    */
   deleteSession(id) {
     if (!this.sessions.has(id)) return false;
 
     this.sessions.delete(id);
+    storageService.deleteSession(id).catch((err) => {
+      console.warn('Failed to delete session from storage:', err);
+    });
+
     this.emit('session:deleted', id);
 
     if (this.activeSessionId === id) {
-      const remaining = Array.from(this.sessions.values());
+      const remaining = this.listSessions();
       if (remaining.length > 0) {
         this.setActiveSession(remaining[0].id);
       } else {
@@ -174,11 +337,25 @@ export class ChatStore extends EventEmitter {
   }
 
   /**
+   * Clears all sessions and wipes persistent storage.
+   * @returns {Promise<void>}
+   */
+  async clearAllSessions() {
+    await storageService.clearAll();
+    this.sessions.clear();
+    this.activeSessionId = null;
+    this.createSession();
+    this.emit('session:cleared');
+  }
+
+  /**
    * Returns all sessions ordered by updatedAt descending
    * @returns {ChatSession[]}
    */
   listSessions() {
-    return Array.from(this.sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+    return Array.from(this.sessions.values()).sort(
+      (a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)
+    );
   }
 
   /**
@@ -198,7 +375,7 @@ export class ChatStore extends EventEmitter {
   }
 
   /**
-   * Appends a message to the active session
+   * Appends a message to the active session and commits it to persistent storage.
    * @param {string} sessionId
    * @param {'user' | 'assistant'} role
    * @param {string} content
@@ -232,13 +409,17 @@ export class ChatStore extends EventEmitter {
       }
     }
 
+    // Persist immediately for non-streaming or initial turn
+    storageService.saveMessage(message).catch(() => {});
+    storageService.saveSession(session).catch(() => {});
+
     this.emit('message:appended', { session, message });
     this.emit('session:updated', session);
     return message;
   }
 
   /**
-   * Updates an existing message
+   * Updates an existing message and debounces storage writes during active streaming.
    * @param {string} sessionId
    * @param {string} messageId
    * @param {Partial<ChatMessage>} updates
@@ -253,8 +434,51 @@ export class ChatStore extends EventEmitter {
     Object.assign(message, updates);
     session.updatedAt = Date.now();
 
+    // Storage persistence strategy
+    if (message.status === 'streaming') {
+      // Debounce writes during fast streaming (at most once every 1.5 seconds)
+      if (!this._saveDebounceTimers.has(message.id)) {
+        const timer = setTimeout(() => {
+          this._saveDebounceTimers.delete(message.id);
+          storageService.saveMessage(message).catch(() => {});
+        }, 1500);
+        this._saveDebounceTimers.set(message.id, timer);
+      }
+    } else {
+      // Completed, stopped, or error: immediately flush and clear any pending debounce
+      if (this._saveDebounceTimers.has(message.id)) {
+        clearTimeout(this._saveDebounceTimers.get(message.id));
+        this._saveDebounceTimers.delete(message.id);
+      }
+      storageService.saveMessage(message).catch(() => {});
+      storageService.saveSession(session).catch(() => {});
+    }
+
     this.emit('message:updated', { session, message });
     return message;
+  }
+
+  /**
+   * Deletes a message from a session
+   * @param {string} sessionId
+   * @param {string} messageId
+   */
+  deleteMessage(sessionId, messageId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+
+    const idx = session.messages.findIndex((m) => m.id === messageId);
+    if (idx === -1) return false;
+
+    session.messages.splice(idx, 1);
+    session.updatedAt = Date.now();
+
+    storageService.deleteMessage(messageId).catch(() => {});
+    storageService.saveSession(session).catch(() => {});
+
+    this.emit('message:deleted', { sessionId, messageId });
+    this.emit('session:updated', session);
+    return true;
   }
 }
 

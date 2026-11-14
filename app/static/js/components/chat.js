@@ -102,6 +102,15 @@ export class ChatView {
     this.userScrolledUp = false;
     this.loadingTimers = new Map();
 
+    // Frame-throttling state for live streaming
+    this.throttle = {
+      rafId: null,
+      lastRenderTime: 0,
+      throttleInterval: 40, // 40ms interval clamp (~25 fps max DOM writes)
+      isDirty: false,
+      pendingMessage: null
+    };
+
     this.init();
   }
 
@@ -111,8 +120,13 @@ export class ChatView {
 
     // Listen to store updates
     store.on('session:active-changed', () => this.render());
+    store.on('session:cleared', () => this.render());
     store.on('message:appended', ({ message }) => this.appendMessageDOM(message));
     store.on('message:updated', ({ message }) => this.updateMessageDOM(message));
+    store.on('message:deleted', ({ messageId }) => {
+      const el = document.getElementById(`msg-${messageId}`);
+      if (el) el.remove();
+    });
   }
 
   setupScrollListener() {
@@ -191,6 +205,14 @@ export class ChatView {
   }
 
   render() {
+    // Cancel any active throttled render
+    if (this.throttle.rafId !== null) {
+      cancelAnimationFrame(this.throttle.rafId);
+      this.throttle.rafId = null;
+    }
+    this.throttle.isDirty = false;
+    this.throttle.pendingMessage = null;
+
     // Clear all loading timers
     for (const [id] of this.loadingTimers) {
       this.stopLoadingTimer(id);
@@ -245,8 +267,11 @@ export class ChatView {
         } else if (msg.status === 'completed' && !msg.content && msg.reasoning) {
           body.innerHTML = '<p class="reasoning-only-note"><em>The model returned only reasoning</em></p>';
         } else {
-          body.innerHTML = renderMarkdown(msg.content);
-          applyDirectionToElement(body, msg.content);
+          const contentEl = document.createElement('div');
+          contentEl.className = 'assistant-content';
+          contentEl.innerHTML = renderMarkdown(msg.content);
+          applyDirectionToElement(contentEl, msg.content);
+          body.appendChild(contentEl);
 
           if (msg.status === 'streaming') {
             const cursor = document.createElement('span');
@@ -300,8 +325,11 @@ export class ChatView {
 
     const content = document.createElement('div');
     content.className = 'thought-content';
-    content.textContent = reasoning;
-    applyDirectionToElement(content, reasoning);
+    const inner = document.createElement('div');
+    inner.className = 'thought-inner';
+    inner.textContent = reasoning;
+    applyDirectionToElement(inner, reasoning);
+    content.appendChild(inner);
 
     chip.addEventListener('click', () => {
       content.classList.toggle('open');
@@ -332,8 +360,16 @@ export class ChatView {
     } else {
       const content = wrap.querySelector('.thought-content');
       if (content) {
-        content.textContent = reasoning;
-        applyDirectionToElement(content, reasoning);
+        let inner = content.querySelector('.thought-inner');
+        if (!inner) {
+          inner = document.createElement('div');
+          inner.className = 'thought-inner';
+          inner.textContent = content.textContent;
+          content.textContent = '';
+          content.appendChild(inner);
+        }
+        inner.textContent = reasoning;
+        applyDirectionToElement(inner, reasoning);
       }
       const label = wrap.querySelector('.thought-label');
       if (label) {
@@ -508,84 +544,337 @@ Message: ${escapeHtml(msg.error || msg.content || 'Unknown error')}</code></pre>
     });
     bar.appendChild(btnRegen);
 
-    // Metadata label (model, speed)
+    // Metadata label & Turn Diagnostics trigger
     if (msg.metrics) {
-      const meta = document.createElement('span');
-      meta.className = 'message-meta-info';
       const parts = [];
       if (msg.metrics.model) parts.push(msg.metrics.model);
       if (msg.metrics.tokensPerSecond) parts.push(`${msg.metrics.tokensPerSecond} tok/s`);
-      meta.textContent = parts.join(' · ');
-      bar.appendChild(meta);
+      if (msg.metrics.timeToFirstTokenMs) {
+        const ttftText = msg.metrics.timeToFirstTokenMs >= 1000
+          ? `${(msg.metrics.timeToFirstTokenMs / 1000).toFixed(1)}s`
+          : `${msg.metrics.timeToFirstTokenMs}ms`;
+        parts.push(`TTFT ${ttftText}`);
+      }
+      if (msg.metrics.durationSeconds) parts.push(`${msg.metrics.durationSeconds}s`);
+
+      const metaBtn = document.createElement('button');
+      metaBtn.type = 'button';
+      metaBtn.className = 'btn-meta-pill';
+      metaBtn.title = 'View inference performance diagnostics';
+      metaBtn.setAttribute('aria-label', 'View inference performance diagnostics');
+      metaBtn.setAttribute('dir', 'ltr');
+      metaBtn.textContent = parts.join(' · ');
+
+      metaBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleTurnDiagnosticsPopover(metaBtn, msg);
+      });
+
+      bar.appendChild(metaBtn);
     }
 
     return bar;
   }
 
   /**
-   * Updates an in-flight streaming message
+   * Toggles turn diagnostics breakdown popover modal
+   * @param {HTMLElement} anchorEl
    * @param {ChatMessage} msg
    */
-  updateMessageDOM(msg) {
+  toggleTurnDiagnosticsPopover(anchorEl, msg) {
+    const existing = document.querySelector('.turn-diagnostics-popover');
+    if (existing) {
+      const isSame = existing._anchorEl === anchorEl;
+      existing.remove();
+      if (isSame) return;
+    }
+
+    if (!msg.metrics) return;
+
+    const formatMs = (ms) => {
+      if (ms === null || ms === undefined) return '—';
+      return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+    };
+
+    const popover = document.createElement('div');
+    popover.className = 'turn-diagnostics-popover';
+    popover.setAttribute('dir', 'ltr');
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', 'Turn Performance Diagnostics');
+    popover._anchorEl = anchorEl;
+
+    popover.innerHTML = `
+      <div class="popover-header">
+        <h4>Turn Diagnostics</h4>
+        <button type="button" class="btn-close-popover" aria-label="Close popover">
+          <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="diag-table">
+        <div class="diag-row">
+          <span class="diag-label">Model</span>
+          <span class="diag-val font-mono">${escapeHtml(msg.metrics.model || 'Unknown')}</span>
+        </div>
+        <div class="diag-row">
+          <span class="diag-label">Time to First Token</span>
+          <span class="diag-val font-mono">${formatMs(msg.metrics.timeToFirstTokenMs)}</span>
+        </div>
+        <div class="diag-row">
+          <span class="diag-label">Response Generation</span>
+          <span class="diag-val font-mono">${msg.metrics.evalCount ?? '—'} tok · ${msg.metrics.tokensPerSecond ? msg.metrics.tokensPerSecond + ' tok/s' : '—'}</span>
+        </div>
+        <div class="diag-row">
+          <span class="diag-label">Prompt Evaluation</span>
+          <span class="diag-val font-mono">${msg.metrics.promptEvalCount ?? '—'} tok · ${msg.metrics.promptEvalTokensPerSecond ? msg.metrics.promptEvalTokensPerSecond + ' tok/s' : '—'}</span>
+        </div>
+        <div class="diag-row">
+          <span class="diag-label">Model Load Duration</span>
+          <span class="diag-val font-mono">${formatMs(msg.metrics.loadDurationMs)}</span>
+        </div>
+        <div class="diag-row total-row">
+          <span class="diag-label">Total Duration</span>
+          <span class="diag-val font-mono">${msg.metrics.durationSeconds ? msg.metrics.durationSeconds + 's' : '—'}</span>
+        </div>
+      </div>
+    `;
+
+    // Position container
+    anchorEl.parentElement.style.position = 'relative';
+    anchorEl.parentElement.appendChild(popover);
+
+    const closeBtn = popover.querySelector('.btn-close-popover');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      popover.remove();
+    });
+
+    const dismissHandler = (e) => {
+      if (!popover.contains(e.target) && e.target !== anchorEl) {
+        popover.remove();
+        document.removeEventListener('click', dismissHandler);
+        document.removeEventListener('keydown', keyHandler);
+      }
+    };
+    const keyHandler = (e) => {
+      if (e.key === 'Escape') {
+        popover.remove();
+        document.removeEventListener('click', dismissHandler);
+        document.removeEventListener('keydown', keyHandler);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('click', dismissHandler);
+      document.addEventListener('keydown', keyHandler);
+    }, 0);
+  }
+
+  /**
+   * Schedules a frame-throttled render pass (max ~25 updates/sec, min 40ms interval)
+   * @param {ChatMessage} msg
+   */
+  scheduleThrottledRender(msg) {
+    this.throttle.pendingMessage = msg;
+    this.throttle.isDirty = true;
+
+    if (this.throttle.rafId !== null) {
+      return;
+    }
+
+    const loop = (timestamp) => {
+      const elapsed = timestamp - this.throttle.lastRenderTime;
+      if (elapsed >= this.throttle.throttleInterval) {
+        this.throttle.lastRenderTime = timestamp;
+        this.throttle.rafId = null;
+
+        if (this.throttle.isDirty && this.throttle.pendingMessage) {
+          this.throttle.isDirty = false;
+          this.renderStreamingMessageDOM(this.throttle.pendingMessage);
+        }
+      } else {
+        this.throttle.rafId = requestAnimationFrame(loop);
+      }
+    };
+
+    this.throttle.rafId = requestAnimationFrame(loop);
+  }
+
+  /**
+   * Performs an animation-frame update of in-flight streaming content
+   * @param {ChatMessage} msg
+   */
+  renderStreamingMessageDOM(msg) {
     const row = document.getElementById(`msg-${msg.id}`);
     if (!row) return;
 
-    if (msg.role === 'assistant') {
-      if (msg.status === 'error') {
-        this.stopLoadingTimer(msg.id);
-        // Replace existing contents with error card
-        row.innerHTML = '';
-        if (msg.reasoning) {
-          const thoughtWrap = this.createThoughtBlock(msg.reasoning, false, msg.createdAt);
-          row.appendChild(thoughtWrap);
-        }
-        const errorCard = this.createErrorCard(msg);
-        row.appendChild(errorCard);
-        this.scrollToBottom();
-        return;
-      }
-
-      // Handle reasoning block
-      if (msg.reasoning) {
-        this.updateThoughtBlock(row, msg.reasoning, msg.status === 'streaming', msg.createdAt);
-      }
-
-      let body = row.querySelector('.assistant-body');
-      if (!body) {
-        body = document.createElement('div');
-        body.className = 'assistant-body';
-        row.appendChild(body);
-      }
-
-      if (msg.status === 'streaming') {
-        if (!msg.content && !msg.reasoning) {
-          this.startLoadingTimer(msg.id, body);
-        } else {
-          this.stopLoadingTimer(msg.id);
-          body.innerHTML = renderMarkdown(msg.content);
-          applyDirectionToElement(body, msg.content);
-          const cursor = document.createElement('span');
-          cursor.className = 'stream-cursor';
-          body.appendChild(cursor);
-        }
-      } else {
-        // Stream finished (completed or stopped)
-        this.stopLoadingTimer(msg.id);
-
-        if (!msg.content && msg.reasoning) {
-          body.innerHTML = '<p class="reasoning-only-note"><em>The model returned only reasoning</em></p>';
-        } else {
-          body.innerHTML = renderMarkdown(msg.content);
-          applyDirectionToElement(body, msg.content);
-        }
-
-        attachCodeCopyHandlers(row);
-        if (!row.querySelector('.message-actions')) {
-          const actions = this.createMessageActions(msg);
-          row.appendChild(actions);
-        }
-      }
+    // 1. Update reasoning thought block if present
+    if (msg.reasoning) {
+      this.updateThoughtBlock(row, msg.reasoning, true, msg.createdAt);
     }
-    this.scrollToBottom();
+
+    // 2. Assistant body
+    let body = row.querySelector('.assistant-body');
+    if (!body) {
+      body = document.createElement('div');
+      body.className = 'assistant-body';
+      row.appendChild(body);
+    }
+
+    if (!msg.content && !msg.reasoning) {
+      this.startLoadingTimer(msg.id, body);
+      return;
+    }
+
+    this.stopLoadingTimer(msg.id);
+
+    // Persistent content container
+    let contentEl = body.querySelector('.assistant-content');
+    if (!contentEl) {
+      body.innerHTML = '';
+      contentEl = document.createElement('div');
+      contentEl.className = 'assistant-content';
+      body.appendChild(contentEl);
+    }
+
+    contentEl.innerHTML = renderMarkdown(msg.content);
+    applyDirectionToElement(contentEl, msg.content);
+
+    // Persistent cursor - preserved across frames to eliminate blink resets
+    let cursor = body.querySelector('.stream-cursor');
+    if (!cursor) {
+      cursor = document.createElement('span');
+      cursor.className = 'stream-cursor';
+      body.appendChild(cursor);
+    } else if (body.lastElementChild !== cursor) {
+      body.appendChild(cursor);
+    }
+
+    // In-flight streaming metrics badge
+    if (msg.liveMetrics && (msg.liveMetrics.speed || msg.liveMetrics.ttftMs)) {
+      let metricsBadge = body.querySelector('.streaming-metrics-badge');
+      if (!metricsBadge) {
+        metricsBadge = document.createElement('div');
+        metricsBadge.className = 'streaming-metrics-badge';
+        metricsBadge.setAttribute('dir', 'ltr');
+        body.appendChild(metricsBadge);
+      }
+      const parts = [];
+      if (msg.liveMetrics.speed) {
+        parts.push(`<span class="live-item live-speed"><span class="icon-bolt">⚡</span> ${msg.liveMetrics.speed} tok/s</span>`);
+      }
+      if (msg.liveMetrics.ttftMs) {
+        const ttftStr = msg.liveMetrics.ttftMs >= 1000
+          ? `${(msg.liveMetrics.ttftMs / 1000).toFixed(1)}s`
+          : `${msg.liveMetrics.ttftMs}ms`;
+        parts.push(`<span class="live-item live-ttft">TTFT ${ttftStr}</span>`);
+      }
+      metricsBadge.innerHTML = parts.join('<span class="live-sep">·</span>');
+    }
+
+    // Auto-scroll sticky bottom only if user hasn't scrolled up
+    if (!this.userScrolledUp) {
+      this.scrollToBottom();
+    }
+  }
+
+  /**
+   * Performs an immediate synchronous final render pass upon stream completion or error
+   * @param {ChatMessage} msg
+   */
+  renderFinalMessageDOM(msg) {
+    const row = document.getElementById(`msg-${msg.id}`);
+    if (!row) return;
+
+    this.stopLoadingTimer(msg.id);
+
+    if (msg.status === 'error') {
+      row.innerHTML = '';
+      if (msg.reasoning) {
+        const thoughtWrap = this.createThoughtBlock(msg.reasoning, false, msg.createdAt);
+        row.appendChild(thoughtWrap);
+      }
+      const errorCard = this.createErrorCard(msg);
+      row.appendChild(errorCard);
+      this.scrollToBottom();
+      return;
+    }
+
+    // Update reasoning block to completed state (showing total seconds)
+    if (msg.reasoning) {
+      this.updateThoughtBlock(row, msg.reasoning, false, msg.createdAt);
+    }
+
+    let body = row.querySelector('.assistant-body');
+    if (!body) {
+      body = document.createElement('div');
+      body.className = 'assistant-body';
+      row.appendChild(body);
+    }
+
+    // Remove any leftover cursor or live streaming badge
+    const cursor = body.querySelector('.stream-cursor');
+    if (cursor) {
+      cursor.remove();
+    }
+    const badge = body.querySelector('.streaming-metrics-badge');
+    if (badge) {
+      badge.remove();
+    }
+
+    if (!msg.content && msg.reasoning) {
+      body.innerHTML = '<p class="reasoning-only-note"><em>The model returned only reasoning</em></p>';
+    } else {
+      let contentEl = body.querySelector('.assistant-content');
+      if (!contentEl) {
+        contentEl = document.createElement('div');
+        contentEl.className = 'assistant-content';
+        body.appendChild(contentEl);
+      }
+      contentEl.innerHTML = renderMarkdown(msg.content);
+      applyDirectionToElement(contentEl, msg.content);
+    }
+
+    attachCodeCopyHandlers(row);
+
+    const existingActions = row.querySelector('.message-actions');
+    if (existingActions) {
+      existingActions.remove();
+    }
+    const actions = this.createMessageActions(msg);
+    row.appendChild(actions);
+
+    if (!this.userScrolledUp) {
+      this.scrollToBottom();
+    }
+  }
+
+  /**
+   * Dispatches updates to an existing message (throttled streaming or immediate final pass)
+   * @param {ChatMessage} msg
+   */
+  updateMessageDOM(msg) {
+    if (msg.role !== 'assistant') {
+      const row = document.getElementById(`msg-${msg.id}`);
+      if (!row) return;
+      const bubble = row.querySelector('.user-bubble');
+      if (bubble) {
+        bubble.textContent = msg.content;
+        applyDirectionToElement(bubble, msg.content);
+      }
+      return;
+    }
+
+    if (msg.status === 'streaming') {
+      this.scheduleThrottledRender(msg);
+    } else {
+      // Completed, stopped, or error: cancel any pending RAF and flush immediately
+      if (this.throttle.rafId !== null) {
+        cancelAnimationFrame(this.throttle.rafId);
+        this.throttle.rafId = null;
+      }
+      this.throttle.isDirty = false;
+      this.throttle.pendingMessage = null;
+
+      this.renderFinalMessageDOM(msg);
+    }
   }
 }

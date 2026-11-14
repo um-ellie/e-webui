@@ -5,6 +5,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List
 from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -97,12 +98,20 @@ async def serve_index():
 
 @app.get("/api/health", response_model=HealthResponse)
 async def health_check():
-    """Liveness check and upstream Ollama connection status."""
-    connected = await ollama_client.check_health()
+    """Liveness check, latency probe, and upstream Ollama connection status."""
+    connected, latency_ms = await ollama_client.check_health_detailed()
+    loaded_models: List[str] = []
+    if connected:
+        try:
+            loaded_models = await ollama_client.get_loaded_models()
+        except Exception:
+            loaded_models = []
     return HealthResponse(
         status="ok" if connected else "degraded",
         ollama_connected=connected,
         ollama_url=OLLAMA_HOST,
+        latency_ms=latency_ms,
+        loaded_models=loaded_models,
     )
 
 

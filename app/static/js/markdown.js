@@ -1,31 +1,84 @@
 /**
  * Safe Markdown Parser & Sanitizer Module
- * Integrates marked.js and DOMPurify with Claude-style code block chrome.
+ * Integrates marked.js, DOMPurify, and offline Prism.js syntax highlighting with Claude-style code block chrome.
  */
+
+export const LANGUAGE_ALIASES = {
+  python: 'python',
+  py: 'python',
+  javascript: 'javascript',
+  js: 'javascript',
+  typescript: 'typescript',
+  ts: 'typescript',
+  bash: 'bash',
+  sh: 'bash',
+  shell: 'bash',
+  zsh: 'bash',
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  html: 'markup',
+  xml: 'markup',
+  svg: 'markup',
+  markup: 'markup',
+  css: 'css',
+  sql: 'sql',
+  markdown: 'markdown',
+  md: 'markdown'
+};
 
 // Configure marked with custom renderer if available
 function getMarkedRenderer() {
-  if (typeof window.marked === 'undefined' || typeof window.marked.Renderer !== 'function') {
+  if (typeof window === 'undefined' || typeof window.marked === 'undefined' || typeof window.marked.Renderer !== 'function') {
     return null;
   }
 
   const renderer = new window.marked.Renderer();
 
-  // Custom code block renderer
+  // Custom code block renderer with Prism syntax highlighting
   renderer.code = function (codeText, language) {
-    const lang = (language || 'text').toLowerCase();
-    const safeLang = lang.replace(/[^a-z0-9_-]/g, '');
+    const rawLang = (language || 'text').trim().toLowerCase();
+    const safeLang = rawLang.replace(/[^a-z0-9_-]/g, '') || 'text';
+    const prismKey = LANGUAGE_ALIASES[safeLang] || safeLang;
+
+    let highlightedHtml = '';
+    const prism = typeof window !== 'undefined' ? window.Prism : null;
+
+    if (prism && prism.languages) {
+      let grammar = prism.languages[prismKey];
+      let targetLang = prismKey;
+
+      // Fallback: typescript -> javascript if typescript grammar is missing
+      if (!grammar && (safeLang === 'typescript' || safeLang === 'ts')) {
+        grammar = prism.languages.javascript;
+        targetLang = 'javascript';
+      }
+
+      if (grammar && typeof prism.highlight === 'function') {
+        try {
+          highlightedHtml = prism.highlight(codeText, grammar, targetLang);
+        } catch (e) {
+          console.warn(`Prism highlighting failed for ${safeLang}:`, e);
+          highlightedHtml = escapeHtml(codeText);
+        }
+      } else {
+        highlightedHtml = escapeHtml(codeText);
+      }
+    } else {
+      highlightedHtml = escapeHtml(codeText);
+    }
 
     return `
 <div class="code-container" dir="ltr">
   <div class="code-header">
-    <span>${safeLang}</span>
+    <span class="code-lang-badge">${safeLang}</span>
     <button class="btn-code-copy" type="button" aria-label="Copy code to clipboard">
-      <svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>
+      <svg class="i icon-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>
+      <svg class="i icon-check" viewBox="0 0 24 24" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>
       <span class="copy-label">Copy</span>
     </button>
   </div>
-  <pre><code>${escapeHtml(codeText)}</code></pre>
+  <pre><code class="language-${safeLang}">${highlightedHtml}</code></pre>
 </div>`;
   };
 
@@ -84,7 +137,7 @@ export function renderMarkdown(text) {
   if (!content) return '';
 
   let rawHtml = '';
-  if (typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
+  if (typeof window !== 'undefined' && typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
     const renderer = getMarkedRenderer();
     rawHtml = renderer
       ? window.marked.parse(content, { renderer, breaks: true, gfm: true })
@@ -94,7 +147,7 @@ export function renderMarkdown(text) {
   }
 
   // Sanitize with DOMPurify
-  if (typeof window.DOMPurify !== 'undefined' && typeof window.DOMPurify.sanitize === 'function') {
+  if (typeof window !== 'undefined' && typeof window.DOMPurify !== 'undefined' && typeof window.DOMPurify.sanitize === 'function') {
     return window.DOMPurify.sanitize(rawHtml, {
       FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur']
@@ -109,6 +162,7 @@ export function renderMarkdown(text) {
  * @param {HTMLElement} container
  */
 export function attachCodeCopyHandlers(container) {
+  if (!container) return;
   const copyButtons = container.querySelectorAll('.btn-code-copy:not([data-copy-bound]), .copy-code-btn:not([data-copy-bound])');
   copyButtons.forEach((btn) => {
     btn.setAttribute('data-copy-bound', 'true');
@@ -124,13 +178,20 @@ export function attachCodeCopyHandlers(container) {
       try {
         await navigator.clipboard.writeText(text);
         const label = btn.querySelector('.copy-label');
-        if (label) {
-          const original = label.textContent;
-          label.textContent = 'Copied!';
-          setTimeout(() => {
-            label.textContent = original;
-          }, 2000);
-        }
+        const iconCopy = btn.querySelector('.icon-copy');
+        const iconCheck = btn.querySelector('.icon-check');
+
+        btn.classList.add('copied');
+        if (label) label.textContent = 'Copied!';
+        if (iconCopy) iconCopy.style.display = 'none';
+        if (iconCheck) iconCheck.style.display = 'inline-block';
+
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          if (label) label.textContent = 'Copy';
+          if (iconCopy) iconCopy.style.display = '';
+          if (iconCheck) iconCheck.style.display = 'none';
+        }, 2000);
       } catch (err) {
         console.error('Clipboard copy failed:', err);
       }

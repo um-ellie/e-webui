@@ -19,7 +19,7 @@ export const FEATURE_REGISTRY = {
   'chat.think_toggle': { status: 'enabled' },
   'chat.attach_file': { status: 'disabled', reason: 'File upload is not available yet' },
   'chat.tools_menu': { status: 'disabled', reason: 'Tools are not available yet' },
-  'chat.export': { status: 'disabled', reason: 'Export is not available yet' },
+  'chat.export': { status: 'enabled' },
   'chat.share': { status: 'disabled', reason: 'Sharing is not available yet' },
 
   // Session actions
@@ -27,6 +27,7 @@ export const FEATURE_REGISTRY = {
   'session.search': { status: 'enabled', shortcut: 'Ctrl+K' },
   'session.rename': { status: 'enabled' },
   'session.delete': { status: 'enabled' },
+  'session.clear_all': { status: 'enabled' },
   'session.pin': { status: 'disabled', reason: 'Pinning chats is not available yet' },
 
   // Navigation actions
@@ -35,8 +36,12 @@ export const FEATURE_REGISTRY = {
   'nav.tools': { status: 'disabled', reason: 'Tools catalog is not available yet' },
 
   // Model settings
-  'model.temperature_tune': { status: 'disabled', reason: 'Custom parameters are not available yet' },
-  'model.system_prompt': { status: 'disabled', reason: 'System prompt configuration is not available yet' }
+  'model.temperature_tune': { status: 'enabled' },
+  'model.system_prompt': { status: 'enabled' },
+
+  // Diagnostics & metrics actions
+  'diagnostics.metrics': { status: 'enabled' },
+  'diagnostics.container_health': { status: 'enabled' }
 };
 
 /**

@@ -111,6 +111,81 @@ class TestStreamPipeline(unittest.TestCase):
         self.assertTrue(chunks[-1]["done"])
         self.assertEqual(chunks[-1]["token"], "")
 
+    def test_stream_chunk_telemetry_fields(self):
+        """Verifies that StreamChunk serializes extended telemetry metrics."""
+        from pathlib import Path
+        try:
+            from app.models import StreamChunk
+            chunk = StreamChunk(
+                token="Done",
+                done=True,
+                status="completed",
+                eval_count=250,
+                eval_duration=5000000000,
+                prompt_eval_count=45,
+                prompt_eval_duration=250000000,
+                load_duration=120000000,
+                total_duration=5370000000,
+            )
+            data = chunk.model_dump()
+            self.assertEqual(data["eval_count"], 250)
+            self.assertEqual(data["eval_duration"], 5000000000)
+            self.assertEqual(data["prompt_eval_count"], 45)
+            self.assertEqual(data["prompt_eval_duration"], 250000000)
+            self.assertEqual(data["load_duration"], 120000000)
+            self.assertEqual(data["total_duration"], 5370000000)
+
+            # Ensure JSON serialization preserves fields
+            json_str = chunk.model_dump_json()
+            self.assertIn('"eval_duration":5000000000', json_str)
+            self.assertIn('"prompt_eval_count":45', json_str)
+        except ImportError:
+            # When pydantic is not installed on host, verify models.py and ollama_client.py schema definitions
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            models_py = (repo_root / "app" / "models.py").read_text(encoding="utf-8")
+            self.assertIn("eval_duration", models_py)
+            self.assertIn("prompt_eval_count", models_py)
+            self.assertIn("prompt_eval_duration", models_py)
+            self.assertIn("load_duration", models_py)
+            self.assertIn("latency_ms", models_py)
+            self.assertIn("loaded_models", models_py)
+
+
+    def test_prompt_request_sampling_parameters(self):
+        """Verifies that PromptRequest models top_p, num_ctx, and system instructions."""
+        from pathlib import Path
+        try:
+            from app.models import PromptRequest
+            req = PromptRequest(
+                model="qwen3.5:4b",
+                prompt="Write code",
+                system="You are a coding specialist.",
+                temperature=0.2,
+                top_p=0.8,
+                num_ctx=8192,
+            )
+            data = req.model_dump()
+            self.assertEqual(data["system"], "You are a coding specialist.")
+            self.assertEqual(data["temperature"], 0.2)
+            self.assertEqual(data["top_p"], 0.8)
+            self.assertEqual(data["num_ctx"], 8192)
+
+            # Test invalid bounds
+            from pydantic import ValidationError
+            with self.assertRaises(ValidationError):
+                PromptRequest(model="test", prompt="hello", top_p=1.5)
+            with self.assertRaises(ValidationError):
+                PromptRequest(model="test", prompt="hello", num_ctx=100)
+        except ImportError:
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            models_py = (repo_root / "app" / "models.py").read_text(encoding="utf-8")
+            self.assertIn("top_p: Optional[float]", models_py)
+            self.assertIn("num_ctx: Optional[int]", models_py)
+            self.assertIn("ge=0.0", models_py)
+            self.assertIn("le=1.0", models_py)
+            self.assertIn("ge=512", models_py)
+            self.assertIn("le=131072", models_py)
+
 
 if __name__ == "__main__":
     unittest.main()

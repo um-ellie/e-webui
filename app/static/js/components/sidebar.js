@@ -8,6 +8,7 @@
 import { store } from '../store.js';
 import { api } from '../api.js';
 import { bindFeatureControl } from '../features.js';
+import { exportSession } from '../export.js';
 
 const SIDEBAR_COLLAPSED_KEY = 'ewebui_sidebar_collapsed';
 
@@ -115,9 +116,11 @@ export class Sidebar {
     }
 
     // React to store events
+    store.on('store:hydrated', () => this.render());
     store.on('session:created', () => this.render());
     store.on('session:updated', () => this.render());
     store.on('session:deleted', () => this.render());
+    store.on('session:cleared', () => this.render());
     store.on('session:active-changed', () => this.render());
   }
 
@@ -252,6 +255,26 @@ export class Sidebar {
       }
     });
     menu.appendChild(optRename);
+
+    // Export Markdown
+    const optExportMd = document.createElement('div');
+    optExportMd.className = 'menu-item';
+    optExportMd.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span>Export Markdown (.md)</span>';
+    optExportMd.addEventListener('click', () => {
+      menu.remove();
+      exportSession(session, 'markdown');
+    });
+    menu.appendChild(optExportMd);
+
+    // Export JSON
+    const optExportJson = document.createElement('div');
+    optExportJson.className = 'menu-item';
+    optExportJson.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Export JSON (.json)</span>';
+    optExportJson.addEventListener('click', () => {
+      menu.remove();
+      exportSession(session, 'json');
+    });
+    menu.appendChild(optExportJson);
 
     // Pin (disabled per feature registry)
     const optPin = document.createElement('div');
