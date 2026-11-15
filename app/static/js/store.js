@@ -200,9 +200,18 @@ export class ChatStore extends EventEmitter {
   createSession(title = 'New conversation', model = null) {
     const now = Date.now();
     let savedModel = null;
+    let savedTemp = 0.7;
+    let savedTopP = 0.9;
+    let savedPrompt = null;
     try {
       if (typeof localStorage !== 'undefined') {
         savedModel = localStorage.getItem('ewebui_last_model');
+        const t = localStorage.getItem('ewebui_default_temperature');
+        if (t !== null && !isNaN(parseFloat(t))) savedTemp = parseFloat(t);
+        const p = localStorage.getItem('ewebui_default_topp');
+        if (p !== null && !isNaN(parseFloat(p))) savedTopP = parseFloat(p);
+        const sp = localStorage.getItem('ewebui_default_system_prompt');
+        if (sp) savedPrompt = sp;
       }
     } catch (_) {}
 
@@ -212,10 +221,10 @@ export class ChatStore extends EventEmitter {
       createdAt: now,
       updatedAt: now,
       model: model || savedModel || this.defaultModel || '',
-      systemPrompt: null,
+      systemPrompt: savedPrompt,
       presetId: null,
-      temperature: 0.7,
-      topP: 0.9,
+      temperature: savedTemp,
+      topP: savedTopP,
       numCtx: null,
       messages: []
     };

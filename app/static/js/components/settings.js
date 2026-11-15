@@ -1,7 +1,7 @@
 /**
  * Settings Dialog Component
  * Accessible tabbed modal: General, Appearance, Models, Shortcuts, About.
- * Handles theme, font size, language settings, focus trapping, and Esc dismissal.
+ * Handles theme, font size, inference parameter settings, focus trapping, and Esc dismissal.
  */
 
 import { themeManager } from '../theme.js';
@@ -18,7 +18,6 @@ export class SettingsDialog {
     // Controls
     this.themeSelect = backdropElement.querySelector('#setting-theme');
     this.fontSizeSelect = backdropElement.querySelector('#setting-font-size');
-    this.langSelect = backdropElement.querySelector('#setting-language');
 
     this.previousFocusedElement = null;
     this.init();
@@ -112,17 +111,6 @@ export class SettingsDialog {
         themeManager.setFontSize(this.fontSizeSelect.value);
       });
     }
-
-    if (this.langSelect) {
-      this.langSelect.addEventListener('change', () => {
-        const lang = this.langSelect.value;
-        if (lang === 'fa') {
-          document.documentElement.setAttribute('dir', 'rtl');
-        } else {
-          document.documentElement.setAttribute('dir', 'ltr');
-        }
-      });
-    }
   }
 
   setupModelsSettings() {
@@ -145,6 +133,9 @@ export class SettingsDialog {
         if (!isNaN(val)) {
           const clamped = Math.min(Math.max(val, 0.0), 2.0);
           tempInput.value = clamped;
+          try {
+            localStorage.setItem('ewebui_default_temperature', String(clamped));
+          } catch (_) {}
           const active = store.getActiveSession();
           if (active) {
             store.updateSession(active.id, { temperature: clamped });
@@ -159,6 +150,9 @@ export class SettingsDialog {
         if (!isNaN(val)) {
           const clamped = Math.min(Math.max(val, 0.0), 1.0);
           toppInput.value = clamped;
+          try {
+            localStorage.setItem('ewebui_default_topp', String(clamped));
+          } catch (_) {}
           const active = store.getActiveSession();
           if (active) {
             store.updateSession(active.id, { topP: clamped });
@@ -169,9 +163,13 @@ export class SettingsDialog {
 
     if (sysPromptInput) {
       sysPromptInput.addEventListener('change', () => {
+        const promptText = sysPromptInput.value.trim();
+        try {
+          localStorage.setItem('ewebui_default_system_prompt', promptText);
+        } catch (_) {}
         const active = store.getActiveSession();
         if (active) {
-          store.updateSession(active.id, { systemPrompt: sysPromptInput.value.trim() });
+          store.updateSession(active.id, { systemPrompt: promptText });
         }
       });
     }

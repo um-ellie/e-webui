@@ -802,7 +802,7 @@ export class Composer {
     const adjustHeight = () => {
       this.textarea.style.height = 'auto';
       const scrollHeight = this.textarea.scrollHeight;
-      const maxHeight = 200; // ~8 lines
+      const maxHeight = 220; // ~9 lines
       this.textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
       this.textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
       this.updateSendButtonState();

@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PastelThemeTokensContract",
+  "description": "Schema specifying required design system tokens for light and dark modes",
+  "tokens": [
+    "--bg",
+    "--side",
+    "--card",
+    "--user",
+    "--active",
+    "--line",
+    "--ink",
+    "--mute",
+    "--codebg",
+    "--codehead",
+    "--pastel-lavender",
+    "--pastel-mint",
+    "--pastel-peach",
+    "--pastel-periwinkle",
+    "--danger"
+  ],
+  "themes": {
+    "dark": {
+      "--bg": "#14121E",
+      "--side": "#181524",
+      "--card": "#201C31",
+      "--active": "#2B2542",
+      "--line": "#342D4E",
+      "--ink": "#F2EFF9",
+      "--mute": "#ADA5C3",
+      "--user": "#2A233F",
+      "--codebg": "#191627",
+      "--codehead": "#231F35",
+      "--pastel-lavender": "#C4B5FD",
+      "--pastel-mint": "#86EFAC",
+      "--pastel-peach": "#FDBA74",
+      "--pastel-periwinkle": "#93C5FD",
+      "--danger": "#F87171"
+    },
+    "light": {
+      "--bg": "#FAF8F5",
+      "--side": "#F3EFEA",
+      "--card": "#FFFFFF",
+      "--active": "#EFE9E2",
+      "--line": "#E5DDD4",
+      "--ink": "#282333",
+      "--mute": "#6D667D",
+      "--user": "#F0EAE1",
+      "--codebg": "#F4EFEA",
+      "--codehead": "#ECE5DD",
+      "--pastel-lavender": "#7C5CBF",
+      "--pastel-mint": "#15803D",
+      "--pastel-peach": "#C2410C",
+      "--pastel-periwinkle": "#2563EB",
+      "--danger": "#DC2626"
+    }
+  }
+}

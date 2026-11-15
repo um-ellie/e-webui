@@ -30,9 +30,10 @@ Designed specifically to replace heavyweight multi-gigabyte UI suites with an ul
 - **Strict Host-Only Isolation**: Binds exclusively to `127.0.0.1:8080` on the host machine via an Incus proxy device. No open ports on local networks or the internet.
 - **Inter-Container Communication**: Talks directly to the Ollama container via an internal proxy device (`127.0.0.1:11434`), remaining completely air-gapped from external networks.
 - **Real-Time Token Streaming**: Real-time response generation via Server-Sent Events (SSE).
-- **Thinking and Reasoning Mode**: Dedicated collapsible thought process block for deep reasoning models (such as `qwen3.5` or `deepseek-r1`), with a header toggle to enable or disable thinking visibility.
-- **Theme Customization**: Built-in toggle to switch smoothly between Light and Dark themes.
-- **Rich Markdown and Code Copy**: Renders Markdown headings, tables, quotes, and code blocks, featuring one-click copy buttons for code snippets and entire assistant responses.
+- **Pastel Design System**: Modern, minimalist, distraction-free aesthetic with soft pastel accents (lavender, mint, peach, periwinkle) on deep charcoal-lavender in Dark Mode and warm alabaster/cream in Light Mode, meeting WCAG 2.1 AA contrast standards.
+- **Thinking and Reasoning Mode**: Dedicated collapsible thought process block with smooth GPU-accelerated height transitions (`grid-template-rows`) and reduced-motion support.
+- **Automatic Per-Message RTL/LTR**: Dynamic script detection formatting individual messages (e.g. Persian/Arabic) with right-to-left layout and native Vazirmatn typography without cluttering interface settings.
+- **Rich Markdown and Code Copy**: Pastel-tinted code chrome with language badges, Prism syntax highlighting, and affirmative copy-state feedback.
 - **Zero External CDN Dependencies**: Bundled static frontend (Vanilla JS and marked.js) that operates 100% offline.
 - **Production-Grade Deployment**: Includes an interactive, resumable deployment manager (`./deploy.sh`) and an immutable release packager (`./build-release.sh`).
 

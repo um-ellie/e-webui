@@ -5,7 +5,9 @@ from pathlib import Path
 import unittest
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-CONTRACT_FILE = WORKSPACE_ROOT / "specs/016-chat-history-persistence/contracts/ui-features.json"
+CONTRACT_FILE = WORKSPACE_ROOT / "specs/021-pastel-ui-overhaul/contracts/ui-features.json"
+if not CONTRACT_FILE.exists():
+    CONTRACT_FILE = WORKSPACE_ROOT / "specs/016-chat-history-persistence/contracts/ui-features.json"
 if not CONTRACT_FILE.exists():
     CONTRACT_FILE = WORKSPACE_ROOT / "specs/013-chat-connection-refinements/contracts/ui-features.json"
 FEATURES_JS_FILE = WORKSPACE_ROOT / "app/static/js/features.js"
@@ -146,6 +148,29 @@ class TestUIContracts(unittest.TestCase):
 
         self.assertIn("'model.temperature_tune': { status: 'enabled' }", content)
         self.assertIn("'model.system_prompt': { status: 'enabled' }", content)
+
+    def test_interface_language_removed(self):
+        """Verify that Interface Language setting and bindings are completely removed."""
+        html_file = WORKSPACE_ROOT / "app/static/index.html"
+        settings_js = WORKSPACE_ROOT / "app/static/js/components/settings.js"
+
+        with open(html_file, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        self.assertNotIn("setting-language", html_content)
+        self.assertNotIn("Interface Language", html_content)
+
+        with open(settings_js, "r", encoding="utf-8") as f:
+            js_content = f.read()
+        self.assertNotIn("setting-language", js_content)
+        self.assertNotIn("langSelect", js_content)
+
+    def test_rtl_message_isolation_intact(self):
+        """Verify per-message RTL detection and code block LTR isolation remain intact."""
+        rtl_file = WORKSPACE_ROOT / "app/static/js/rtl.js"
+        with open(rtl_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("function applyDirectionToElement", content)
+        self.assertIn("function isolateLtrContent", content)
 
 
 if __name__ == "__main__":

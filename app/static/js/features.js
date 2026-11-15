@@ -1,6 +1,6 @@
 /**
  * Centralized Feature-Availability Registry
- * Contract: specs/012-chat-ui-redesign/contracts/ui-features.json
+ * Contract: specs/021-pastel-ui-overhaul/contracts/ui-features.json
  *
  * Maps every interface control to either:
  * - 'enabled': Backed by backend capability
