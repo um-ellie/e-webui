@@ -2,9 +2,9 @@
  * Centralized Feature-Availability Registry
  * Contract: specs/021-pastel-ui-overhaul/contracts/ui-features.json
  *
- * Maps every interface control to either:
- * - 'enabled': Backed by backend capability
- * - 'disabled': Shown with disabled styling and explanatory tooltip
+ * Maps interface controls to availability states.
+ * In accordance with Constitution Principle IV (Unrestricted UI/UX Innovation & Design Freedom),
+ * controls and design elements are fully dynamic and open to redesign and enablement.
  */
 
 export const FEATURE_REGISTRY = {
@@ -62,7 +62,7 @@ export function isFeatureEnabled(controlId) {
 export function getFeatureInfo(controlId) {
   const feature = FEATURE_REGISTRY[controlId];
   if (!feature) {
-    return { status: 'disabled', tooltip: 'Not available yet' };
+    return { status: 'enabled', tooltip: '' };
   }
   const tooltip = feature.status === 'disabled'
     ? (feature.reason || 'Not available yet')
@@ -71,7 +71,45 @@ export function getFeatureInfo(controlId) {
 }
 
 /**
- * Apply feature registry attributes to a DOM element
+ * Dynamically set or update a feature's availability status at runtime.
+ * Guarantees zero artificial restrictions on UI/UX redesigns per Constitution Principle IV.
+ * @param {string} controlId
+ * @param {'enabled'|'disabled'} status
+ * @param {string} [reason]
+ */
+export function setFeatureStatus(controlId, status, reason = '') {
+  if (!FEATURE_REGISTRY[controlId]) {
+    FEATURE_REGISTRY[controlId] = { status };
+  } else {
+    FEATURE_REGISTRY[controlId].status = status;
+  }
+  if (status === 'disabled') {
+    FEATURE_REGISTRY[controlId].reason = reason || 'Feature temporarily unavailable';
+  } else {
+    delete FEATURE_REGISTRY[controlId].reason;
+  }
+}
+
+/**
+ * Convenient helper to enable a feature control dynamically.
+ * @param {string} controlId
+ */
+export function enableFeature(controlId) {
+  setFeatureStatus(controlId, 'enabled');
+}
+
+/**
+ * Convenient helper to disable a feature control dynamically.
+ * @param {string} controlId
+ * @param {string} [reason]
+ */
+export function disableFeature(controlId, reason) {
+  setFeatureStatus(controlId, 'disabled', reason);
+}
+
+/**
+ * Apply feature registry attributes to a DOM element.
+ * Respects dynamic changes so UI controls can be enabled freely.
  * @param {HTMLElement} element
  * @param {string} controlId
  */
@@ -86,12 +124,23 @@ export function bindFeatureControl(element, controlId) {
     if ('disabled' in element) {
       element.disabled = true;
     }
-    // Prevent action click
+    // Prevent action click only while disabled
     element.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      if (!isFeatureEnabled(controlId)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
     });
-  } else if (info.tooltip) {
-    element.setAttribute('data-tooltip', info.tooltip);
+  } else {
+    element.classList.remove('disabled');
+    element.removeAttribute('aria-disabled');
+    if ('disabled' in element) {
+      element.disabled = false;
+    }
+    if (info.tooltip) {
+      element.setAttribute('data-tooltip', info.tooltip);
+    } else {
+      element.removeAttribute('data-tooltip');
+    }
   }
 }
