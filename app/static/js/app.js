@@ -1,5 +1,6 @@
 /**
  * Application Bootstrap Entrypoint
+ * Soft Sage & Warm Sand Design System
  * Initializes modular components, event listeners, and keyboard shortcuts.
  */
 
@@ -13,7 +14,6 @@ import { EmptyState } from './components/empty.js';
 import { SettingsDialog } from './components/settings.js';
 import { setupKeyboardShortcuts } from './shortcuts.js';
 import { ttsController } from './tts.js';
-import { api } from './api.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // 0. Initialize persistent storage and hydrate store
@@ -24,37 +24,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 1. Initialize Settings Dialog
-  const settingsBackdrop = document.getElementById('settings-modal');
+  const settingsBackdrop = document.getElementById('ov') || document.getElementById('settings-modal');
   const settingsDialog = settingsBackdrop ? new SettingsDialog(settingsBackdrop) : null;
 
   // 2. Initialize Sidebar
-  const sidebarContainer = document.querySelector('.sidebar');
+  const sidebarContainer = document.getElementById('sidebar') || document.querySelector('aside') || document.querySelector('.sidebar');
   const sidebar = sidebarContainer ? new Sidebar(sidebarContainer) : null;
 
-  // 3. Initialize Header & Health Polling
-  const headerContainer = document.querySelector('.top-header');
+  // 3. Initialize Header
+  const headerContainer = document.querySelector('header') || document.querySelector('.top-header');
   const header = headerContainer ? new Header(headerContainer) : null;
-  store.startHealthPolling(() => api.checkHealth(), 30000);
 
   // 4. Initialize Chat View
-  const chatContainer = document.querySelector('.reading-column .messages-list');
+  const chatContainer = document.getElementById('messages-list') || document.querySelector('.messages-list');
   const chatView = chatContainer ? new ChatView(chatContainer) : null;
 
   // 5. Initialize Composer
-  const composerContainer = document.querySelector('.composer-box');
+  const composerContainer = document.querySelector('.cap') || document.querySelector('.composer-box');
   const composer = composerContainer ? new Composer(composerContainer) : null;
 
   // 6. Initialize Empty State
-  const emptyStateContainer = document.querySelector('.empty-state');
+  const emptyStateContainer = document.getElementById('empty-state') || document.querySelector('.empty-state');
   const emptyState = emptyStateContainer ? new EmptyState(emptyStateContainer) : null;
 
-  // 7. Wire sidebar settings button to modal
-  const btnOpenSettings = document.querySelector('.btn-open-settings');
-  if (btnOpenSettings && settingsDialog) {
-    btnOpenSettings.addEventListener('click', () => {
-      settingsDialog.open('general');
+  // 7. Wire all settings buttons to open modal
+  document.querySelectorAll('[data-open="settings"], .btn-open-settings').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (settingsDialog) {
+        settingsDialog.open('p1');
+      }
     });
-  }
+  });
 
   // 8. Register global keyboard shortcuts
   setupKeyboardShortcuts(settingsDialog);

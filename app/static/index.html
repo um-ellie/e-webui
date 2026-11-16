@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>e-webui</title>
-  <meta name="description" content="Claude-style chat interface for local Ollama models">
-  <meta name="theme-color" content="#F6FBFE">
+  <meta name="description" content="Modern, calm AI chat interface for local Ollama models">
+  <meta name="theme-color" content="#fff9ef">
 
   <!-- Favicons and Web App Manifest -->
   <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
@@ -14,8 +14,21 @@
   <link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
   <link rel="manifest" href="/static/img/site.webmanifest">
 
-  <!-- Local Self-Hosted Stylesheet -->
+  <!-- Local Stylesheet -->
   <link rel="stylesheet" href="/static/style.css">
+
+  <!-- Pre-first-paint synchronous theme execution to prevent flash of wrong theme -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('ewebui_theme') || localStorage.getItem('theme') || 'system';
+        var isDark = t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+        var s = localStorage.getItem('ewebui_font_scale');
+        if (s) document.documentElement.style.fontSize = s + '%';
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- Local Vendored Libraries -->
   <script src="/static/vendor/marked.min.js"></script>
@@ -23,73 +36,102 @@
   <script src="/static/vendor/prism.min.js"></script>
 </head>
 <body>
+  <!-- SVG Symbols Definition Block -->
+  <svg width="0" height="0" style="position:absolute;display:none" aria-hidden="true">
+    <defs>
+      <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+      <symbol id="send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+      <symbol id="stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></symbol>
+      <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></symbol>
+      <symbol id="mon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+      <symbol id="act" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+      <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="srch" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+      <symbol id="shr" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13"/></symbol>
+      <symbol id="dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+      <symbol id="chev" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+      <symbol id="bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.4 1 2.5h6c0-1.1.3-1.8 1-2.5A6 6 0 0 0 12 3z"/></symbol>
+      <symbol id="sld" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+      <symbol id="clip" viewBox="0 0 24 24"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 8"/></symbol>
+      <symbol id="tool" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5 5L3 18l3 3 6.7-6.7a4 4 0 0 0 5-5l-2.5 2.5-2.4-.6-.6-2.4z"/></symbol>
+      <symbol id="pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+      <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="ok" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+      <symbol id="cp" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
+      <symbol id="spk" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6"/></symbol>
+      <symbol id="rl" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></symbol>
+      <symbol id="pnl" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></symbol>
+      <symbol id="usr" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+      <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    </defs>
+  </svg>
+
   <div class="app-layout">
     <!-- Left Navigation Sidebar -->
-    <aside class="sidebar" aria-label="Chat navigation">
-      <div class="sidebar-header">
+    <aside class="sidebar" id="sidebar" aria-label="Chat navigation">
+      <div class="brand">
         <a href="/" class="brand-link" aria-label="e-webui home">
           <svg viewBox="25 21 162 48" role="img" aria-label="Ellie logo" class="logo logo-full hide-collapsed" height="26">
             <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
-            <path d="M67 45C67 38.5 71.5 36.5 75 41C78 44.8 81 44 81.2 37" fill="none" stroke="var(--purple)" stroke-width="4.6"/>
-            <path d="M98 29H104.2L92.2 58.6H86Z" fill="var(--purple)"/>
-            <circle cx="116" cy="52.8" r="4.1" fill="var(--purple)"/>
-            <path d="M128 30H144.5V35.2H134V40H143.5V45H134V51H144.5V56H128Z" fill="var(--purple)"/>
-            <rect class="logo-cursor" x="160" y="56.2" width="19" height="4.8" fill="var(--purple)"/>
-          </svg>
-          <svg viewBox="28 28 88 34" role="img" aria-label="Ellie mark" class="mark logo-compact show-collapsed" height="22" style="display:none">
-            <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
-            <path d="M60 30H76.5V35.2H66V40H75.5V45H66V51H76.5V56H60Z" fill="var(--purple)"/>
-            <rect class="logo-cursor" x="84" y="56.2" width="18" height="4.8" fill="var(--purple)"/>
+            <path d="M67 45C67 38.5 71.5 36.5 75 41C78 44.8 81 44 81.2 37" fill="none" stroke="var(--sd)" stroke-width="4.6"/>
+            <path d="M98 29H104.2L92.2 58.6H86Z" fill="var(--sd)"/>
+            <circle cx="116" cy="52.8" r="4.1" fill="var(--sd)"/>
+            <path d="M128 30H144.5V35.2H134V40H143.5V45H134V51H144.5V56H128Z" fill="var(--sd)"/>
+            <rect class="logo-cursor" x="160" y="56.2" width="19" height="4.8" fill="var(--rose)"/>
           </svg>
         </a>
-        <button class="btn-icon btn-collapse-sidebar" type="button" aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)">
-          <svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+        <button class="ic btn-collapse-sidebar" id="sbtoggle" type="button" aria-label="Collapse sidebar" title="Toggle sidebar (Ctrl+B)">
+          <svg class="i"><use href="#pnl"/></svg>
         </button>
       </div>
 
-      <div class="sidebar-actions hide-collapsed">
-        <button class="btn-new-chat" type="button" title="Start new conversation (Ctrl+Shift+O)">
-          <svg class="i r" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-          <span>New chat</span>
-        </button>
-        <div class="search-box">
-          <svg class="i" viewBox="0 0 24 24" style="color:var(--mute);width:16px;height:16px"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-          <input class="search-input" type="search" placeholder="Search chats..." aria-label="Search conversations" />
-        </div>
+      <button class="new btn-new-chat" id="newchat" type="button" title="Start new conversation (Ctrl+Shift+O)">
+        <svg class="i"><use href="#plus"/></svg>
+        <span>New chat</span>
+      </button>
+
+      <div class="search search-box">
+        <svg class="i"><use href="#srch"/></svg>
+        <input class="search-input" type="search" placeholder="Search chats..." aria-label="Search conversations" />
       </div>
 
-      <nav class="sidebar-nav hide-collapsed">
-        <a href="#" class="nav-link" aria-current="page">
-          <svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          <span>Chats</span>
-        </a>
-        <a href="#" class="nav-link nav-library disabled" aria-disabled="true">
-          <svg class="i" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"/></svg>
-          <span>Library</span>
-        </a>
-        <a href="#" class="nav-link nav-tools disabled" aria-disabled="true">
-          <svg class="i" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-          <span>Tools</span>
-        </a>
+      <!-- Navigation links (disabled placeholders) -->
+      <nav class="sidebar-nav hide-collapsed" style="display:none">
+        <a href="#" class="nav-link nav-library disabled" aria-disabled="true"><svg class="i"><use href="#tool"/></svg><span>Library</span></a>
+        <a href="#" class="nav-link nav-tools disabled" aria-disabled="true"><svg class="i"><use href="#tool"/></svg><span>Tools</span></a>
       </nav>
 
       <!-- Grouped Session List -->
-      <div class="session-list hide-collapsed" role="list" aria-label="Recent chats">
+      <div class="list session-list" id="session-list" role="list" aria-label="Recent chats">
         <!-- Dynamically rendered by sidebar.js -->
       </div>
 
-      <!-- Sidebar Footer -->
-      <div class="sidebar-footer">
-        <div class="avatar" aria-hidden="true">E</div>
-        <div class="footer-user-info hide-collapsed">
-          <div class="user-name">Ellie</div>
-          <div class="connection-sub">
-            <span class="dot" aria-hidden="true"></span>
-            <span class="status-text">Connecting</span>
+      <!-- Sidebar Footer Connection Telemetry Capsule -->
+      <div class="foot sidebar-footer">
+        <div class="pop up" id="cpop" role="dialog" aria-label="Ollama Connection Diagnostics" style="left:0;right:0">
+          <div class="kv">
+            <span>Status</span><b id="cstate">Checking…</b>
+            <span>Endpoint</span><b id="cend">127.0.0.1:11434</b>
+            <span>Latency</span><b id="clat">—</b>
+            <span>In memory</span><b id="cmodels">No model loaded</b>
+            <span>Checked</span><b id="cts">just now</b>
           </div>
+          <hr>
+          <button class="it" id="retest" type="button"><svg class="i"><use href="#rl"/></svg>Reconnect and test</button>
+          <button class="it btn-open-settings" data-open="settings" type="button"><svg class="i"><use href="#gear"/></svg>Open settings</button>
         </div>
-        <button class="btn-icon btn-open-settings hide-collapsed" type="button" aria-label="Open settings" title="Settings">
-          <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+
+        <button class="conn st-chk" id="conn" type="button" aria-haspopup="dialog" aria-expanded="false" title="Ollama connection telemetry">
+          <span class="dot"></span>
+          <svg class="i"><use href="#act"/></svg>
+          <span id="clabel">Checking</span>
+          <small id="cms">…</small>
+        </button>
+
+        <button class="ic btn-open-settings" data-open="settings" type="button" aria-label="Settings" title="Settings">
+          <svg class="i"><use href="#gear"/></svg>
         </button>
       </div>
     </aside>
@@ -98,325 +140,203 @@
     <main class="main-stage">
       <!-- Top Header -->
       <header class="top-header">
-        <div class="header-left">
-          <button class="btn-icon mobile-menu-toggle" type="button" aria-label="Open sidebar">
-            <svg class="i" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <button class="ic mobile-menu-toggle" id="opensb" type="button" aria-label="Open sidebar">
+          <svg class="i"><use href="#pnl"/></svg>
+        </button>
+
+        <div class="title header-left">
+          <button class="header-chat-title" id="ttl" type="button" aria-label="Rename chat" title="Click to rename">
+            <span class="header-title-text" id="ttl-text">New conversation</span>
+            <svg class="i"><use href="#pen"/></svg>
           </button>
-          <div class="header-chat-title" tabindex="0" role="button" aria-label="Click to rename chat" title="Click to rename">
-            New conversation
-          </div>
         </div>
 
-        <div class="header-right">
-          <!-- Container Health Status Pill & Popover Anchor -->
-          <div class="health-indicator-container">
-            <button class="health-indicator-btn" type="button" aria-label="Connection Diagnostics" aria-expanded="false" dir="ltr" title="Connection status">
-              <span class="health-dot status-connected"></span>
-              <span class="health-label">Connected</span>
-            </button>
+        <!-- 3-State Theme Switcher Segmented Control -->
+        <div class="seg" role="radiogroup" aria-label="Theme" data-seg style="--i: 0;">
+          <button role="radio" data-m="light" aria-checked="false" aria-label="Light" title="Light" type="button"><svg class="i"><use href="#sun"/></svg></button>
+          <button role="radio" data-m="dark" aria-checked="false" aria-label="Dark" title="Dark" type="button"><svg class="i"><use href="#moon"/></svg></button>
+          <button role="radio" data-m="system" aria-checked="true" aria-label="System" title="System" type="button"><svg class="i"><use href="#mon"/></svg></button>
+        </div>
+
+        <button class="ic btn-share" type="button" aria-label="Share conversation" title="Share">
+          <svg class="i"><use href="#shr"/></svg>
+        </button>
+
+        <!-- More options dropdown menu -->
+        <div style="position:relative">
+          <button class="ic btn-header-overflow" id="more" type="button" aria-label="More options" aria-expanded="false" title="More options">
+            <svg class="i"><use href="#dots"/></svg>
+          </button>
+          <div class="pop dn" id="morepop" role="menu">
+            <button class="it" id="more-export" type="button"><svg class="i"><use href="#shr"/></svg>Export as Markdown</button>
+            <button class="it" id="more-rename" type="button"><svg class="i"><use href="#pen"/></svg>Rename chat</button>
+            <hr>
+            <button class="it" id="delchat" type="button" style="color:var(--danger)"><svg class="i"><use href="#x"/></svg>Delete this chat</button>
           </div>
-
-          <button class="btn-icon btn-share" type="button" aria-label="Share conversation">
-            <svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          </button>
-
-          <button class="btn-icon btn-header-overflow" type="button" aria-label="More options">
-            <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-          </button>
         </div>
       </header>
 
-      <!-- Scrollable Reading Area (720px Column) -->
-      <div class="chat-scroll-area">
-        <div class="reading-column">
-          <!-- Empty State Greeting -->
-          <div class="empty-state">
-            <div class="empty-logo-mark">
-              <svg viewBox="28 28 88 34" role="img" aria-label="Ellie mark" class="mark" height="34">
-                <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
-                <path d="M60 30H76.5V35.2H66V40H75.5V45H66V51H76.5V56H60Z" fill="var(--purple)"/>
-                <rect class="logo-cursor" x="84" y="56.2" width="18" height="4.8" fill="var(--purple)"/>
-              </svg>
-            </div>
-            <h1 class="empty-greeting">Good evening, Ellie</h1>
+      <!-- Scrollable Reading Area -->
+      <div class="stage chat-scroll-area">
+        <div class="col reading-column" id="view">
+          <!-- Asymmetric Start-Aligned Empty State Greeting -->
+          <div class="hello empty-state" id="empty-state">
+            <h1 class="empty-greeting" id="empty-greeting">Good evening</h1>
+            <p id="empty-sub">How can I help you today?</p>
           </div>
 
           <!-- Message Turns Container -->
-          <div class="messages-list" role="log" aria-live="polite">
+          <div class="messages-list" id="messages-list" role="log" aria-live="polite">
             <!-- Dynamically populated by chat.js -->
           </div>
         </div>
       </div>
 
-      <!-- Composer Card Anchor -->
-      <div class="composer-area">
-        <div class="reading-column">
-          <div class="composer-box">
-            <!-- Drag and Drop Overlay -->
-            <div class="drop-overlay" style="display:none">
-              <svg class="i p" style="width:36px;height:36px" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-              <div style="font-weight:600;font-size:15px">File upload is not available yet</div>
-              <div style="font-size:12.5px;color:var(--mute)">Attachments will be enabled in a future update</div>
-            </div>
-
-            <!-- Auto-growing Textarea -->
-            <textarea
-              class="composer-textarea"
-              placeholder="How can I help you today?"
-              rows="1"
-              aria-label="Write your message"
-            ></textarea>
-
-            <!-- Accessory Toolbar -->
-            <div class="composer-toolbar">
-              <button class="btn-icon btn-attach" type="button" aria-label="Attach file" style="border:1px solid var(--line);border-radius:999px;width:34px;height:34px">
-                <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-              </button>
-
-              <button class="pill-toggle pill-tools" type="button">
-                <svg class="i" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
-                <span>Tools</span>
-              </button>
-
-              <button class="pill-toggle pill-think on" type="button" aria-pressed="true">
-                <svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>
-                <span>Think</span>
-              </button>
-
-              <!-- Model Parameters & Presets Pill and Popover -->
-              <div class="params-wrapper">
-                <button class="pill-toggle pill-params" id="btn-params-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="Model parameters and presets" title="Model parameters and system prompt">
-                  <svg class="i" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
-                  <span class="params-label" id="params-label">Preset</span>
-                  <span class="param-badge-pill" id="params-active-badge">0.7</span>
-                </button>
-                <div class="params-popover" id="params-popover" role="dialog" aria-label="Model Parameters and Presets" hidden>
-                  <div class="params-header">
-                    <span class="params-title">Parameters & Persona</span>
-                    <button type="button" class="btn-icon btn-close-params" id="btn-close-params" aria-label="Close parameters">
-                      <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
-
-                  <div class="params-body">
-                    <!-- Preset Selection -->
-                    <div class="params-field">
-                      <label for="param-preset-select" class="params-field-label">Persona Preset</label>
-                      <div class="params-preset-row">
-                        <select id="param-preset-select" class="params-select">
-                          <!-- Populated dynamically -->
-                        </select>
-                        <button type="button" class="btn-preset-action btn-save-preset" id="btn-save-custom-preset" title="Save current settings as new custom preset">Save</button>
-                        <button type="button" class="btn-preset-action btn-delete-preset" id="btn-delete-custom-preset" title="Delete custom preset" style="display:none">Delete</button>
-                      </div>
-                    </div>
-
-                    <!-- System Instructions Textarea -->
-                    <div class="params-field">
-                      <div class="params-label-row">
-                        <label for="param-system-prompt" class="params-field-label">System Instructions</label>
-                        <span class="params-char-count" id="param-char-count">0 / 10,000</span>
-                      </div>
-                      <textarea id="param-system-prompt" class="params-textarea" rows="3" maxlength="10000" placeholder="Instructions or persona directives for this conversation..."></textarea>
-                    </div>
-
-                    <!-- Quick Sampling Shortcuts -->
-                    <div class="params-field">
-                      <label class="params-field-label">Sampling Style</label>
-                      <div class="params-shortcuts">
-                        <button type="button" class="btn-chip" data-style="deterministic" title="Temperature 0.2, Top-P 0.8">Deterministic</button>
-                        <button type="button" class="btn-chip active" data-style="balanced" title="Temperature 0.7, Top-P 0.9">Balanced</button>
-                        <button type="button" class="btn-chip" data-style="creative" title="Temperature 1.2, Top-P 0.95">Creative</button>
-                      </div>
-                    </div>
-
-                    <!-- Sliders -->
-                    <div class="params-field">
-                      <div class="params-label-row">
-                        <label for="param-temperature" class="params-field-label">Temperature</label>
-                        <span class="param-val" id="param-temp-val">0.70</span>
-                      </div>
-                      <input type="range" id="param-temperature" min="0.0" max="2.0" step="0.05" value="0.7" class="param-slider">
-                    </div>
-
-                    <div class="params-field">
-                      <div class="params-label-row">
-                        <label for="param-topp" class="params-field-label">Top-P (Nucleus)</label>
-                        <span class="param-val" id="param-topp-val">0.90</span>
-                      </div>
-                      <input type="range" id="param-topp" min="0.0" max="1.0" step="0.05" value="0.9" class="param-slider">
-                    </div>
-
-                    <!-- Context Window -->
-                    <div class="params-field">
-                      <label for="param-num-ctx" class="params-field-label">Context Window</label>
-                      <select id="param-num-ctx" class="params-select">
-                        <option value="">Model Default</option>
-                        <option value="2048">2,048 tokens</option>
-                        <option value="4096" selected>4,096 tokens</option>
-                        <option value="8192">8,192 tokens</option>
-                        <option value="16384">16,384 tokens</option>
-                        <option value="32768">32,768 tokens</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div style="flex:1"></div>
-
-              <!-- Model Picker Pill and Popover Menu -->
-              <div class="mw">
-                <button class="mp" id="mp" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Choose model">
-                  <span class="mg"></span>
-                  <span class="mn" id="mn">Loading…</span>
-                  <span class="mt" id="mtg" style="display:none"></span>
-                  <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M6 15l6-6 6 6"/></svg>
-                </button>
-                <div class="pop" id="pop" role="listbox" aria-label="Models" hidden>
-                  <div class="mh">Models</div>
-                  <div class="model-search-box" id="model-search-box" style="display:none;padding:0 8px 8px">
-                    <input type="search" class="model-search-input" id="model-search-input" placeholder="Search models..." aria-label="Search models" style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:13px;outline:none" />
-                  </div>
-                  <div class="model-items-list" id="model-items-list" role="presentation">
-                    <!-- populated dynamically -->
-                  </div>
-                  <div class="mf" aria-disabled="true" title="Not available yet">
-                    Manage models<span class="tag">Not available yet</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Microphone input button (disabled) -->
-              <button class="mic" type="button" disabled aria-label="Voice input" title="Voice input is not available yet" data-control-id="chat.mic_input">
-                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-              </button>
-
-              <!-- Send button (Enter key return symbol) -->
-              <button class="sendb btn-send" type="button" aria-label="Send message (Enter)" title="Send (Enter)">
-                <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4v7a4 4 0 0 1-4 4H4"/><path d="M9 10l-5 5 5 5"/></svg>
-              </button>
-            </div>
+      <!-- Contextual Minimalist Floating Composer -->
+      <div class="cwrap composer-area">
+        <div class="cap composer-box">
+          <!-- Drag and Drop Overlay -->
+          <div class="drop-overlay" style="display:none">
+            <svg class="i" style="width:32px;height:32px" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            <div style="font-weight:600;font-size:14px">File upload is not available yet</div>
           </div>
 
-          <div class="composer-disclaimer">
-            Local models can make mistakes. Check important info.
+          <!-- Transient Active Chips (Think, Preset) -->
+          <div class="chips" id="chips"></div>
+
+          <!-- Auto-growing Textarea -->
+          <textarea
+            class="composer-textarea"
+            id="ta"
+            rows="1"
+            placeholder="Message your local model"
+            aria-label="Write your message"
+          ></textarea>
+
+          <!-- Subtle Embedded Microphone Input -->
+          <button class="mic ic" id="mic" type="button" disabled aria-label="Voice input" title="Voice input is not available yet" data-control-id="chat.mic_input">
+            <svg class="i"><use href="#mic"/></svg>
+          </button>
+
+          <!-- Bottom Action Row -->
+          <div class="row composer-toolbar">
+            <!-- Plus Quick Actions -->
+            <div style="position:relative">
+              <button class="ic btn-attach" id="plus" type="button" aria-label="Add" aria-haspopup="true" aria-expanded="false" style="border:1px solid var(--line);border-radius:50%">
+                <svg class="i"><use href="#plus"/></svg>
+              </button>
+              <div class="pop up" id="ppop" role="menu" style="left:0">
+                <button class="it" id="pop-attach" type="button"><svg class="i"><use href="#clip"/></svg>Attach file</button>
+                <button class="it" id="pop-tools" type="button"><svg class="i"><use href="#tool"/></svg>Tools<em>none enabled</em></button>
+                <button class="it" id="thinkbtn" type="button" aria-pressed="false"><svg class="i"><use href="#bulb"/></svg>Think<span class="sw"></span></button>
+                <hr>
+                <button class="it" data-preset="Balanced · 0.7" type="button"><svg class="i"><use href="#sld"/></svg>Balanced<em>0.7</em></button>
+                <button class="it" data-preset="Precise · 0.3" type="button"><svg class="i"><use href="#sld"/></svg>Precise<em>0.3</em></button>
+                <button class="it" data-preset="Creative · 1.0" type="button"><svg class="i"><use href="#sld"/></svg>Creative<em>1.0</em></button>
+              </div>
+            </div>
+
+            <!-- Model Picker Chip and Popover -->
+            <div class="mw" style="position:relative;margin-inline-start:auto">
+              <button class="mc mp" id="mc" type="button" aria-haspopup="listbox" aria-expanded="false" style="margin:0">
+                <span class="mn" id="mn">Loading…</span>
+                <svg class="i"><use href="#chev"/></svg>
+              </button>
+              <div class="pop up" id="mpop" role="listbox" aria-label="Models" style="right:0">
+                <div class="model-items-list" id="model-items-list" role="presentation">
+                  <!-- populated dynamically -->
+                </div>
+                <div class="mf" aria-disabled="true" title="Not available yet" style="display:none">
+                  Manage models<span class="tag">Not available yet</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Round Morphing Send / Stop Button -->
+            <button class="go sendb btn-send" id="go" type="button" aria-label="Send message (Enter)" title="Send (Enter)">
+              <svg class="i" id="go-icon"><use href="#send"/></svg>
+            </button>
           </div>
+        </div>
+
+        <div class="note composer-disclaimer">
+          Local models can make mistakes. Check important info.
         </div>
       </div>
     </main>
   </div>
 
-  <!-- Settings Modal Dialog -->
-  <div id="settings-modal" class="modal-backdrop" aria-hidden="true">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title">
-      <div class="modal-header">
-        <h2 id="settings-dialog-title" class="modal-title">Settings</h2>
-        <button class="btn-icon btn-close-modal" type="button" aria-label="Close dialog">
-          <svg class="i" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+  <!-- Task-Centric 3-Pane Settings Dialog -->
+  <div class="ov modal-backdrop" id="ov" role="dialog" aria-modal="true" aria-label="Settings" aria-hidden="true">
+    <div class="dlg modal-card">
+      <div class="nav tabs-nav" role="tablist">
+        <h2>Settings</h2>
+        <button role="tab" class="tab-btn active" aria-selected="true" data-pane="p1" data-tab="workspace" type="button"><svg class="i"><use href="#usr"/></svg>Workspace</button>
+        <button role="tab" class="tab-btn" aria-selected="false" data-pane="p2" data-tab="model" type="button"><svg class="i"><use href="#sld"/></svg>Model</button>
+        <button role="tab" class="tab-btn" aria-selected="false" data-pane="p3" data-tab="data" type="button"><svg class="i"><use href="#db"/></svg>Data &amp; system</button>
       </div>
 
-      <nav class="tabs-nav" aria-label="Settings categories">
-        <button class="tab-btn active" data-tab="general" type="button">General</button>
-        <button class="tab-btn" data-tab="appearance" type="button">Appearance</button>
-        <button class="tab-btn" data-tab="models" type="button">Models</button>
-        <button class="tab-btn" data-tab="shortcuts" type="button">Shortcuts</button>
-        <button class="tab-btn" data-tab="about" type="button">About</button>
-      </nav>
+      <div style="position:relative;overflow:hidden;display:flex;flex:1;flex-direction:column">
+        <button class="ic x btn-close-modal" id="closeset" type="button" aria-label="Close dialog"><svg class="i"><use href="#x"/></svg></button>
 
-      <div class="modal-body">
-        <!-- General Tab -->
-        <div id="tab-general" class="tab-pane">
-          <div class="settings-group data-management-group" style="padding-top:4px">
-            <label class="settings-label" style="color:var(--danger)">Data Management</label>
-            <p style="font-size:12.5px;color:var(--mute);margin-bottom:10px">Permanently delete all stored conversations and reset your local workspace.</p>
-            <button id="btn-clear-all-chats" type="button" class="btn-danger" style="padding:8px 16px;border-radius:8px;font-size:13.5px;font-weight:500;cursor:pointer">Clear all conversations</button>
+        <!-- Pane 1: Workspace & Experience -->
+        <section class="pane tab-pane" id="p1" style="flex:1">
+          <h3>Workspace</h3>
+          <div class="fld">
+            <label>Theme</label>
+            <div class="seg" role="radiogroup" aria-label="Theme" data-seg>
+              <button role="radio" data-m="light" aria-label="Light" title="Light" type="button"><svg class="i"><use href="#sun"/></svg></button>
+              <button role="radio" data-m="dark" aria-label="Dark" title="Dark" type="button"><svg class="i"><use href="#moon"/></svg></button>
+              <button role="radio" data-m="system" aria-label="System" title="System" type="button"><svg class="i"><use href="#mon"/></svg></button>
+            </div>
           </div>
-        </div>
+          <div class="fld">
+            <label for="fsr">Text size <span id="fs">100%</span></label>
+            <input type="range" min="90" max="120" value="100" id="fsr" aria-label="Text size">
+          </div>
+          <details class="sc" id="sc">
+            <summary>Keyboard shortcuts</summary>
+            <div class="kv">
+              <span>New chat</span><b>Ctrl+Shift+O</b>
+              <span>Toggle sidebar</span><b>Ctrl+B</b>
+              <span>Send</span><b>Enter</b>
+              <span>Focus composer</span><b>/</b>
+              <span>Close dialog / Stop</span><b>Esc</b>
+            </div>
+          </details>
+        </section>
 
-        <!-- Appearance Tab -->
-        <div id="tab-appearance" class="tab-pane" style="display:none">
-          <div class="settings-group">
-            <label for="setting-theme" class="settings-label">Color Theme</label>
-            <select id="setting-theme" class="settings-select">
-              <option value="system">System (Automatic)</option>
-              <option value="light">Light Mode</option>
-              <option value="dark">Dark Mode</option>
-            </select>
+        <!-- Pane 2: Model & Generation -->
+        <section class="pane tab-pane" id="p2" style="flex:1" hidden>
+          <h3>Model</h3>
+          <div class="fld">
+            <label for="tr">Default temperature <span id="tv">0.70</span></label>
+            <input type="range" min="0" max="2" step="0.05" value="0.70" id="tr" aria-label="Default temperature">
           </div>
+          <div class="fld">
+            <label for="pr">Default top-p <span id="pv">0.90</span></label>
+            <input type="range" min="0" max="1" step="0.05" value="0.90" id="pr" aria-label="Default top-p">
+          </div>
+          <div class="fld">
+            <label for="ta-sys">Default system instructions</label>
+            <textarea class="ta" id="ta-sys" rows="3" aria-label="Default system instructions" placeholder="Optional. Applied to every new chat."></textarea>
+          </div>
+        </section>
 
-          <div class="settings-group">
-            <label for="setting-font-size" class="settings-label">Interface Font Size</label>
-            <select id="setting-font-size" class="settings-select">
-              <option value="small">Compact (13.5px)</option>
-              <option value="medium">Default (15px)</option>
-              <option value="large">Spacious (16.5px)</option>
-            </select>
+        <!-- Pane 3: Data & System -->
+        <section class="pane tab-pane" id="p3" style="flex:1" hidden>
+          <h3>Data &amp; system</h3>
+          <div class="kv">
+            <span>Version</span><b>e-webui 1.0 (Sage &amp; Warm Sand)</b>
+            <span>Storage</span><b>Browser, this device only</b>
+            <span>Engine</span><b>Ollama (local)</b>
           </div>
-        </div>
-
-        <!-- Models Tab -->
-        <div id="tab-models" class="tab-pane" style="display:none">
-          <div class="settings-group">
-            <label for="setting-temperature" class="settings-label">Default Temperature (0.0 - 2.0)</label>
-            <input id="setting-temperature" class="settings-select" type="number" value="0.7" min="0.0" max="2.0" step="0.05">
+          <div class="dz">
+            <h4>Delete all conversations</h4>
+            <p>Removes every chat from this browser. This cannot be undone.</p>
+            <button class="btn2" id="del" type="button">Delete all conversations</button>
           </div>
-          <div class="settings-group">
-            <label for="setting-topp" class="settings-label">Default Top-P (0.0 - 1.0)</label>
-            <input id="setting-topp" class="settings-select" type="number" value="0.9" min="0.0" max="1.0" step="0.05">
-          </div>
-          <div class="settings-group">
-            <label for="setting-system-prompt" class="settings-label">Default System Instructions</label>
-            <textarea id="setting-system-prompt" class="settings-select" rows="3" placeholder="Default instructions applied to new conversations..."></textarea>
-          </div>
-        </div>
-
-        <!-- Shortcuts Tab -->
-        <div id="tab-shortcuts" class="tab-pane" style="display:none">
-          <table style="width:100%;border-collapse:collapse;font-size:14px">
-            <tbody>
-              <tr style="border-bottom:1px solid var(--line);height:36px">
-                <td><strong>Search chats</strong></td>
-                <td style="text-align:right"><kbd>Ctrl</kbd> + <kbd>K</kbd></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--line);height:36px">
-                <td><strong>New chat</strong></td>
-                <td style="text-align:right"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--line);height:36px">
-                <td><strong>Toggle sidebar</strong></td>
-                <td style="text-align:right"><kbd>Ctrl</kbd> + <kbd>B</kbd></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--line);height:36px">
-                <td><strong>Focus composer</strong></td>
-                <td style="text-align:right"><kbd>/</kbd></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--line);height:36px">
-                <td><strong>Stop generation / Close modal</strong></td>
-                <td style="text-align:right"><kbd>Esc</kbd></td>
-              </tr>
-              <tr style="height:36px">
-                <td><strong>Keyboard shortcuts</strong></td>
-                <td style="text-align:right"><kbd>?</kbd></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- About Tab -->
-        <div id="tab-about" class="tab-pane" style="display:none">
-          <div style="text-align:center;padding:12px 0">
-            <svg viewBox="28 28 88 34" role="img" aria-label="Ellie mark" class="mark" height="40">
-              <path d="M33 33H35.2L51 44L35.2 55H33V49.8L43 44L33 38.2Z" fill="var(--rose)"/>
-              <path d="M60 30H76.5V35.2H66V40H75.5V45H66V51H76.5V56H60Z" fill="var(--purple)"/>
-              <rect class="logo-cursor" x="84" y="56.2" width="18" height="4.8" fill="var(--purple)"/>
-            </svg>
-            <h3 style="margin-top:12px">e-webui</h3>
-            <p style="color:var(--mute);font-size:13.5px;margin-top:4px">Version 1.1.0 (Pastel Design System)</p>
-            <p style="color:var(--mute);font-size:12.5px;margin-top:12px">A calm, modern web interface for local Ollama models on Incus.</p>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   </div>

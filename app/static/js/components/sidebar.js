@@ -1,28 +1,35 @@
 /**
  * Sidebar Navigation Component
- * Manages sessions list, date grouping (Today/Yesterday/7 days/Older),
- * instant title search, hover context actions (Rename, Pin, Delete),
- * collapse rail toggle, and Ollama connection status monitoring.
+ * Manages sessions list, date grouping (Today/Yesterday/Previous 7 days/Older),
+ * instant title search, sidebar collapse, and authoritative Ollama connection
+ * telemetry capsule + upward diagnostics popover.
  */
 
 import { store } from '../store.js';
-import { api } from '../api.js';
+import { healthManager } from '../health.js';
 import { bindFeatureControl } from '../features.js';
-import { exportSession } from '../export.js';
 
 const SIDEBAR_COLLAPSED_KEY = 'ewebui_sidebar_collapsed';
 
 export class Sidebar {
   constructor(container) {
     this.container = container;
-    this.sessionListContainer = container.querySelector('.session-list');
+    this.sessionListContainer = container.querySelector('.session-list') || container.querySelector('#session-list');
     this.searchInput = container.querySelector('.search-input');
-    this.btnNewChat = container.querySelector('.btn-new-chat');
-    this.btnToggleCollapse = container.querySelector('.btn-collapse-sidebar');
-    this.connectionDot = container.querySelector('.connection-sub .dot');
-    this.connectionText = container.querySelector('.connection-sub .status-text');
-    this.navLibrary = container.querySelector('.nav-library');
-    this.navTools = container.querySelector('.nav-tools');
+    this.btnNewChat = container.querySelector('.btn-new-chat') || container.querySelector('#newchat');
+    this.btnToggleCollapse = container.querySelector('.btn-collapse-sidebar') || container.querySelector('#sbtoggle');
+
+    // Telemetry capsule elements
+    this.connBtn = container.querySelector('#conn');
+    this.cpop = container.querySelector('#cpop');
+    this.cLabel = container.querySelector('#clabel');
+    this.cMs = container.querySelector('#cms');
+    this.cState = container.querySelector('#cstate');
+    this.cEnd = container.querySelector('#cend');
+    this.cLat = container.querySelector('#clat');
+    this.cModels = container.querySelector('#cmodels');
+    this.cTs = container.querySelector('#cts');
+    this.retestBtn = container.querySelector('#retest');
 
     this.searchQuery = '';
     this.isCollapsed = this.getSavedCollapsedState();
@@ -40,24 +47,11 @@ export class Sidebar {
 
   init() {
     this.applyCollapsedState(this.isCollapsed);
-    this.bindRegistryControls();
     this.setupListeners();
-    this.pollHealth();
-
-    // Re-poll health periodically
-    setInterval(() => this.pollHealth(), 15000);
+    this.setupConnectionTelemetry();
 
     // Initial render
     this.render();
-  }
-
-  bindRegistryControls() {
-    if (this.navLibrary) {
-      bindFeatureControl(this.navLibrary, 'nav.library');
-    }
-    if (this.navTools) {
-      bindFeatureControl(this.navTools, 'nav.tools');
-    }
   }
 
   setupListeners() {
@@ -65,8 +59,7 @@ export class Sidebar {
       this.btnNewChat.addEventListener('click', (e) => {
         e.preventDefault();
         store.createSession();
-        // If on mobile, close drawer
-        if (window.innerWidth < 1024) {
+        if (window.innerWidth < 760) {
           this.container.classList.remove('open');
         }
       });
@@ -77,36 +70,22 @@ export class Sidebar {
         this.isCollapsed = !this.isCollapsed;
         try {
           localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(this.isCollapsed));
-        } catch (e) {
-          console.warn('Failed to persist sidebar state:', e);
-        }
+        } catch (_) {}
         this.applyCollapsedState(this.isCollapsed);
       });
     }
 
-    const brandLink = this.container.querySelector('.brand-link');
-    if (brandLink) {
-      brandLink.addEventListener('click', (e) => {
-        if (this.isCollapsed) {
-          e.preventDefault();
-          this.isCollapsed = false;
-          try {
-            localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
-          } catch (_) {}
-          this.applyCollapsedState(false);
-        }
+    const openSbBtn = document.getElementById('opensb');
+    if (openSbBtn) {
+      openSbBtn.addEventListener('click', () => {
+        this.isCollapsed = false;
+        try {
+          localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
+        } catch (_) {}
+        this.applyCollapsedState(false);
+        this.container.classList.toggle('open');
       });
     }
-
-    // Backdrop dismissal on mobile/tablet
-    document.addEventListener('click', (e) => {
-      if (window.innerWidth < 1024 && this.container.classList.contains('open')) {
-        const toggleBtn = document.querySelector('.mobile-menu-toggle');
-        if (!this.container.contains(e.target) && (!toggleBtn || !toggleBtn.contains(e.target))) {
-          this.container.classList.remove('open');
-        }
-      }
-    });
 
     if (this.searchInput) {
       this.searchInput.addEventListener('input', (e) => {
@@ -127,24 +106,118 @@ export class Sidebar {
   applyCollapsedState(collapsed) {
     if (collapsed) {
       this.container.classList.add('collapsed');
+      document.body.classList.add('sbc');
       this.container.setAttribute('aria-expanded', 'false');
     } else {
       this.container.classList.remove('collapsed');
+      document.body.classList.remove('sbc');
       this.container.setAttribute('aria-expanded', 'true');
     }
   }
 
-  async pollHealth() {
-    if (!this.connectionDot) return;
-    const health = await api.getHealth();
-    if (health && health.ollama_connected) {
-      this.connectionDot.classList.remove('offline');
-      this.connectionDot.title = `Connected to Ollama (${health.ollama_url})`;
-      if (this.connectionText) this.connectionText.textContent = 'Ollama connected';
-    } else {
-      this.connectionDot.classList.add('offline');
-      this.connectionDot.title = 'Ollama unreachable';
-      if (this.connectionText) this.connectionText.textContent = 'Ollama offline';
+  setupConnectionTelemetry() {
+    if (!this.connBtn || !this.cpop) return;
+
+    // Toggle diagnostics popover
+    const togglePopover = (show) => {
+      const isExpanded = show !== undefined ? show : !this.cpop.classList.contains('on');
+      this.cpop.classList.toggle('on', isExpanded);
+      this.connBtn.setAttribute('aria-expanded', String(isExpanded));
+    };
+
+    this.connBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      togglePopover();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (this.cpop.classList.contains('on') && !this.cpop.contains(e.target) && !this.connBtn.contains(e.target)) {
+        togglePopover(false);
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.cpop.classList.contains('on')) {
+        togglePopover(false);
+        this.connBtn.focus();
+      }
+    });
+
+    if (this.retestBtn) {
+      this.retestBtn.addEventListener('click', async () => {
+        this.retestBtn.disabled = true;
+        this.retestBtn.textContent = 'Checking…';
+        try {
+          await healthManager.checkNow();
+        } finally {
+          this.retestBtn.disabled = false;
+          this.retestBtn.innerHTML = '<svg class="i"><use href="#rl"/></svg>Reconnect and test';
+        }
+      });
+    }
+
+    // Subscribe to healthManager updates
+    healthManager.subscribe((snapshot) => {
+      this.updateConnectionUI(snapshot);
+    });
+
+    // Start health telemetry polling
+    healthManager.startPolling();
+  }
+
+  updateConnectionUI(snapshot) {
+    if (!this.connBtn) return;
+
+    // Remove old state classes
+    this.connBtn.classList.remove('st-on', 'st-slow', 'st-off', 'st-chk');
+
+    let stateClass = 'st-chk';
+    let label = 'Checking';
+    let sub = '…';
+    let stateDesc = 'Checking connection…';
+
+    switch (snapshot.status) {
+      case 'online':
+        stateClass = 'st-on';
+        label = 'Online';
+        sub = snapshot.latencyMs !== null ? `${snapshot.latencyMs} ms` : 'OK';
+        stateDesc = 'Operational';
+        break;
+      case 'degraded':
+        stateClass = 'st-slow';
+        label = 'Slow';
+        sub = snapshot.latencyMs !== null ? `${snapshot.latencyMs} ms` : 'Slow';
+        stateDesc = 'High Latency / Degraded';
+        break;
+      case 'offline':
+        stateClass = 'st-off';
+        label = 'Offline';
+        sub = 'Unreachable';
+        stateDesc = 'Ollama Unreachable';
+        break;
+      case 'checking':
+      default:
+        stateClass = 'st-chk';
+        label = 'Checking';
+        sub = '…';
+        stateDesc = 'Checking…';
+        break;
+    }
+
+    this.connBtn.classList.add(stateClass);
+    if (this.cLabel) this.cLabel.textContent = label;
+    if (this.cMs) this.cMs.textContent = sub;
+
+    // Popover content
+    if (this.cState) this.cState.textContent = stateDesc;
+    if (this.cEnd) this.cEnd.textContent = snapshot.endpointUrl || '127.0.0.1:11434';
+    if (this.cLat) this.cLat.textContent = snapshot.latencyMs !== null ? `${snapshot.latencyMs} ms` : '—';
+    if (this.cModels) {
+      const models = snapshot.loadedModels || [];
+      this.cModels.textContent = models.length > 0 ? models.join(', ') : 'No model loaded';
+    }
+    if (this.cTs) {
+      this.cTs.textContent = snapshot.checkedAt ? new Date(snapshot.checkedAt).toLocaleTimeString() : 'just now';
     }
   }
 
@@ -197,119 +270,32 @@ export class Sidebar {
       if (groupItems.length === 0) continue;
 
       const label = document.createElement('div');
-      label.className = 'section-label hide-collapsed';
+      label.className = 'grp section-label';
       label.textContent = groupName;
       this.sessionListContainer.appendChild(label);
 
-      for (const item of groupItems) {
-        const row = document.createElement('div');
-        row.className = `session-item ${activeSession && activeSession.id === item.id ? 'active' : ''}`;
-        row.title = item.title;
+      for (const session of groupItems) {
+        const item = document.createElement('button');
+        item.className = 'sess session-item';
+        item.dataset.sessionId = session.id;
+        const isActive = activeSession && activeSession.id === session.id;
+        item.setAttribute('aria-current', String(isActive));
+        if (isActive) item.classList.add('active');
 
-        // Title link
         const titleSpan = document.createElement('span');
-        titleSpan.className = 'session-title hide-collapsed';
-        titleSpan.textContent = item.title;
-        titleSpan.addEventListener('click', () => {
-          store.setActiveSession(item.id);
-          if (window.innerWidth < 1024) {
+        titleSpan.textContent = session.title || 'New conversation';
+        titleSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:start;';
+        item.appendChild(titleSpan);
+
+        item.addEventListener('click', () => {
+          store.setActiveSession(session.id);
+          if (window.innerWidth < 760) {
             this.container.classList.remove('open');
           }
         });
-        row.appendChild(titleSpan);
 
-        // Hover Context Menu Button
-        const menuBtn = document.createElement('button');
-        menuBtn.className = 'session-menu-btn hide-collapsed';
-        menuBtn.type = 'button';
-        menuBtn.title = 'Chat options';
-        menuBtn.innerHTML = '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
-        menuBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.openSessionMenu(e, item);
-        });
-        row.appendChild(menuBtn);
-
-        this.sessionListContainer.appendChild(row);
+        this.sessionListContainer.appendChild(item);
       }
     }
-  }
-
-  openSessionMenu(e, session) {
-    // Remove existing open menus
-    const existing = document.querySelector('.context-menu');
-    if (existing) existing.remove();
-
-    const menu = document.createElement('div');
-    menu.className = 'context-menu';
-
-    // Rename
-    const optRename = document.createElement('div');
-    optRename.className = 'menu-item';
-    optRename.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg><span>Rename</span>';
-    optRename.addEventListener('click', () => {
-      menu.remove();
-      const newTitle = prompt('Rename chat:', session.title);
-      if (newTitle !== null) {
-        store.updateSession(session.id, { title: newTitle });
-      }
-    });
-    menu.appendChild(optRename);
-
-    // Export Markdown
-    const optExportMd = document.createElement('div');
-    optExportMd.className = 'menu-item';
-    optExportMd.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span>Export Markdown (.md)</span>';
-    optExportMd.addEventListener('click', () => {
-      menu.remove();
-      exportSession(session, 'markdown');
-    });
-    menu.appendChild(optExportMd);
-
-    // Export JSON
-    const optExportJson = document.createElement('div');
-    optExportJson.className = 'menu-item';
-    optExportJson.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>Export JSON (.json)</span>';
-    optExportJson.addEventListener('click', () => {
-      menu.remove();
-      exportSession(session, 'json');
-    });
-    menu.appendChild(optExportJson);
-
-    // Pin (disabled per feature registry)
-    const optPin = document.createElement('div');
-    optPin.className = 'menu-item disabled';
-    optPin.innerHTML = '<svg class="i" viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-2l-3-3V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v7l-3 3v2z"/></svg><span>Pin</span>';
-    bindFeatureControl(optPin, 'session.pin');
-    menu.appendChild(optPin);
-
-    // Delete
-    const optDelete = document.createElement('div');
-    optDelete.className = 'menu-item';
-    optDelete.style.color = 'var(--danger)';
-    optDelete.innerHTML = '<svg class="i" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Delete</span>';
-    optDelete.addEventListener('click', () => {
-      menu.remove();
-      if (confirm(`Delete chat "${session.title}"?`)) {
-        store.deleteSession(session.id);
-      }
-    });
-    menu.appendChild(optDelete);
-
-    // Position menu near button
-    const rect = e.currentTarget.getBoundingClientRect();
-    menu.style.top = `${rect.bottom + 4}px`;
-    menu.style.left = `${Math.min(rect.left, window.innerWidth - 160)}px`;
-
-    document.body.appendChild(menu);
-
-    // Dismiss on click outside
-    const dismissHandler = (evt) => {
-      if (!menu.contains(evt.target)) {
-        menu.remove();
-        document.removeEventListener('click', dismissHandler);
-      }
-    };
-    setTimeout(() => document.addEventListener('click', dismissHandler), 10);
   }
 }

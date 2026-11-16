@@ -6,6 +6,7 @@
  */
 
 import { storageService } from './storage.js';
+import { healthManager } from './health.js';
 
 export class EventEmitter {
   constructor() {
@@ -49,16 +50,30 @@ export class ChatStore extends EventEmitter {
     this._saveDebounceTimers = new Map();
     this.isHydrated = false;
 
-    /** @type {{ status: 'connected'|'degraded'|'disconnected', latencyMs: number|null, ollamaUrl: string, checkedAt: number, loadedModels: string[], errorMessage: string|null }} */
+    // Contextual composer accessory states
+    this.composerThinking = false;
+    this.composerPreset = null;
+
+    /** @type {{ status: 'online'|'degraded'|'offline'|'checking', latencyMs: number|null, endpointUrl: string, checkedAt: number, loadedModels: string[], errorMessage: string|null }} */
     this.connectionHealth = {
-      status: 'connected',
+      status: 'checking',
       latencyMs: null,
-      ollamaUrl: '',
+      endpointUrl: 'http://127.0.0.1:11434',
       checkedAt: 0,
       loadedModels: [],
       errorMessage: null
     };
     this._healthPollTimer = null;
+  }
+
+  setComposerThinking(isThinking) {
+    this.composerThinking = Boolean(isThinking);
+    this.emit('composer:thinking-changed', this.composerThinking);
+  }
+
+  setComposerPreset(preset) {
+    this.composerPreset = preset;
+    this.emit('composer:preset-changed', this.composerPreset);
   }
 
   setConnectionHealth(snapshot) {

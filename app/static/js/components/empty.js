@@ -1,6 +1,8 @@
 /**
  * EmptyState Greeting Component
- * Computes time-of-day greetings ("Good evening, Ellie") and renders brand mark (>E_).
+ * Renders asymmetric, start-aligned editorial time-of-day greeting
+ * ("Good morning", "Good afternoon", "Good evening") in the reading column.
+ * Zero duplicate logos, zero engine status text, zero username.
  */
 
 import { store } from '../store.js';
@@ -8,7 +10,7 @@ import { store } from '../store.js';
 export class EmptyState {
   constructor(container) {
     this.container = container;
-    this.greetingElement = container.querySelector('.empty-greeting');
+    this.greetingElement = container.querySelector('#empty-greeting') || container.querySelector('.empty-greeting');
 
     this.init();
   }
@@ -29,11 +31,11 @@ export class EmptyState {
   getTimeGreeting() {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) {
-      return 'Good morning, Ellie';
+      return 'Good morning';
     } else if (hour >= 12 && hour < 17) {
-      return 'Good afternoon, Ellie';
+      return 'Good afternoon';
     } else {
-      return 'Good evening, Ellie';
+      return 'Good evening';
     }
   }
 
@@ -44,7 +46,7 @@ export class EmptyState {
   }
 
   updateVisibility(session) {
-    if (!session || session.messages.length === 0) {
+    if (!session || !session.messages || session.messages.length === 0) {
       this.container.style.display = 'flex';
     } else {
       this.container.style.display = 'none';

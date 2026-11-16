@@ -1,7 +1,8 @@
 /**
  * Settings Dialog Component
- * Accessible tabbed modal: General, Appearance, Models, Shortcuts, About.
- * Handles theme, font size, inference parameter settings, focus trapping, and Esc dismissal.
+ * 3-Pane Task-Centric Architecture: Workspace, Model, Data & System
+ * Handles theme switching, text font scaling, model inference parameters,
+ * and two-step Danger Zone conversation wiping.
  */
 
 import { themeManager } from '../theme.js';
@@ -11,70 +12,60 @@ import { store } from '../store.js';
 export class SettingsDialog {
   constructor(backdropElement) {
     this.backdrop = backdropElement;
-    this.closeBtn = backdropElement.querySelector('.btn-close-modal');
-    this.tabButtons = backdropElement.querySelectorAll('.tab-btn');
-    this.tabPanes = backdropElement.querySelectorAll('.tab-pane');
+    this.closeBtn = backdropElement.querySelector('#closeset') || backdropElement.querySelector('.btn-close-modal');
+    this.paneButtons = backdropElement.querySelectorAll('button[data-pane]');
+    this.panes = backdropElement.querySelectorAll('.pane');
 
     // Controls
-    this.themeSelect = backdropElement.querySelector('#setting-theme');
-    this.fontSizeSelect = backdropElement.querySelector('#setting-font-size');
+    this.fontScaleRange = backdropElement.querySelector('#fsr');
+    this.fontScaleVal = backdropElement.querySelector('#fs');
+    this.tempRange = backdropElement.querySelector('#tr');
+    this.tempVal = backdropElement.querySelector('#tv');
+    this.topPRange = backdropElement.querySelector('#pr');
+    this.topPVal = backdropElement.querySelector('#pv');
+    this.sysPromptInput = backdropElement.querySelector('#ta-sys');
+    this.btnDeleteAll = backdropElement.querySelector('#del');
 
+    this.deleteConfirmState = false;
+    this.deleteTimeout = null;
     this.previousFocusedElement = null;
+
     this.init();
   }
 
   init() {
-    this.setupTabs();
+    this.setupPanes();
     this.setupClose();
-    this.setupAppearanceSettings();
-    this.setupModelsSettings();
+    this.setupWorkspaceSettings();
+    this.setupModelSettings();
     this.setupDataManagement();
     this.bindRegistryControls();
   }
 
-  setupDataManagement() {
-    const btnClearAll = this.backdrop.querySelector('#btn-clear-all-chats');
-    if (btnClearAll) {
-      btnClearAll.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to permanently delete all conversations? This cannot be undone.')) {
-          try {
-            await store.clearAllSessions();
-            this.close();
-          } catch (err) {
-            console.error('Failed to clear sessions:', err);
-          }
-        }
-      });
-    }
-  }
-
-  bindRegistryControls() {
-    const tempInput = this.backdrop.querySelector('#setting-temperature');
-    if (tempInput) {
-      bindFeatureControl(tempInput, 'model.temperature_tune');
-    }
-    const sysPromptInput = this.backdrop.querySelector('#setting-system-prompt');
-    if (sysPromptInput) {
-      bindFeatureControl(sysPromptInput, 'model.system_prompt');
-    }
-  }
-
-  setupTabs() {
-    this.tabButtons.forEach((btn) => {
+  setupPanes() {
+    this.paneButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
-        const targetTab = btn.getAttribute('data-tab');
-
-        this.tabButtons.forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        this.tabPanes.forEach((pane) => {
-          if (pane.id === `tab-${targetTab}`) {
-            pane.style.display = 'block';
-          } else {
-            pane.style.display = 'none';
-          }
-        });
+        const targetId = btn.dataset.pane;
+        this.switchPane(targetId);
       });
+    });
+  }
+
+  switchPane(targetId) {
+    this.paneButtons.forEach((b) => {
+      const isTarget = b.dataset.pane === targetId;
+      b.setAttribute('aria-selected', String(isTarget));
+      b.classList.toggle('active', isTarget);
+    });
+
+    this.panes.forEach((pane) => {
+      if (pane.id === targetId) {
+        pane.hidden = false;
+        pane.style.display = 'block';
+      } else {
+        pane.hidden = true;
+        pane.style.display = 'none';
+      }
     });
   }
 
@@ -97,110 +88,136 @@ export class SettingsDialog {
     });
   }
 
-  setupAppearanceSettings() {
-    if (this.themeSelect) {
-      this.themeSelect.value = themeManager.currentTheme;
-      this.themeSelect.addEventListener('change', () => {
-        themeManager.setTheme(this.themeSelect.value);
-      });
-    }
+  setupWorkspaceSettings() {
+    // Font scale slider
+    if (this.fontScaleRange) {
+      const currentScale = themeManager.getSavedFontScale();
+      this.fontScaleRange.value = String(currentScale);
+      if (this.fontScaleVal) this.fontScaleVal.textContent = `${currentScale}%`;
 
-    if (this.fontSizeSelect) {
-      this.fontSizeSelect.value = themeManager.currentFontSize;
-      this.fontSizeSelect.addEventListener('change', () => {
-        themeManager.setFontSize(this.fontSizeSelect.value);
+      this.fontScaleRange.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        themeManager.setFontScale(val);
+        if (this.fontScaleVal) this.fontScaleVal.textContent = `${val}%`;
       });
     }
   }
 
-  setupModelsSettings() {
-    const tempInput = this.backdrop.querySelector('#setting-temperature');
-    const toppInput = this.backdrop.querySelector('#setting-topp');
-    const sysPromptInput = this.backdrop.querySelector('#setting-system-prompt');
+  setupModelSettings() {
+    // Temperature slider
+    if (this.tempRange) {
+      const savedTemp = store.defaultTemperature ?? 0.7;
+      this.tempRange.value = String(savedTemp);
+      if (this.tempVal) this.tempVal.textContent = parseFloat(savedTemp).toFixed(2);
 
-    const syncFromActiveSession = () => {
-      const active = store.getActiveSession();
-      if (active) {
-        if (tempInput) tempInput.value = typeof active.temperature === 'number' ? active.temperature : 0.7;
-        if (toppInput) toppInput.value = typeof active.topP === 'number' ? active.topP : 0.9;
-        if (sysPromptInput) sysPromptInput.value = active.systemPrompt || '';
-      }
-    };
-
-    if (tempInput) {
-      tempInput.addEventListener('change', () => {
-        const val = parseFloat(tempInput.value);
-        if (!isNaN(val)) {
-          const clamped = Math.min(Math.max(val, 0.0), 2.0);
-          tempInput.value = clamped;
-          try {
-            localStorage.setItem('ewebui_default_temperature', String(clamped));
-          } catch (_) {}
-          const active = store.getActiveSession();
-          if (active) {
-            store.updateSession(active.id, { temperature: clamped });
-          }
-        }
-      });
-    }
-
-    if (toppInput) {
-      toppInput.addEventListener('change', () => {
-        const val = parseFloat(toppInput.value);
-        if (!isNaN(val)) {
-          const clamped = Math.min(Math.max(val, 0.0), 1.0);
-          toppInput.value = clamped;
-          try {
-            localStorage.setItem('ewebui_default_topp', String(clamped));
-          } catch (_) {}
-          const active = store.getActiveSession();
-          if (active) {
-            store.updateSession(active.id, { topP: clamped });
-          }
-        }
-      });
-    }
-
-    if (sysPromptInput) {
-      sysPromptInput.addEventListener('change', () => {
-        const promptText = sysPromptInput.value.trim();
+      this.tempRange.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        store.defaultTemperature = val;
         try {
-          localStorage.setItem('ewebui_default_system_prompt', promptText);
+          localStorage.setItem('ewebui_default_temp', String(val));
         } catch (_) {}
-        const active = store.getActiveSession();
-        if (active) {
-          store.updateSession(active.id, { systemPrompt: promptText });
-        }
+        if (this.tempVal) this.tempVal.textContent = val.toFixed(2);
       });
     }
 
-    store.on('session:active-changed', syncFromActiveSession);
-    syncFromActiveSession();
+    // Top-P slider
+    if (this.topPRange) {
+      const savedTopP = store.defaultTopP ?? 0.9;
+      this.topPRange.value = String(savedTopP);
+      if (this.topPVal) this.topPVal.textContent = parseFloat(savedTopP).toFixed(2);
+
+      this.topPRange.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        store.defaultTopP = val;
+        try {
+          localStorage.setItem('ewebui_default_topp', String(val));
+        } catch (_) {}
+        if (this.topPVal) this.topPVal.textContent = val.toFixed(2);
+      });
+    }
+
+    // System prompt textarea
+    if (this.sysPromptInput) {
+      this.sysPromptInput.value = store.defaultSystemPrompt || '';
+      this.sysPromptInput.addEventListener('input', (e) => {
+        store.defaultSystemPrompt = e.target.value;
+        try {
+          localStorage.setItem('ewebui_default_sysprompt', e.target.value);
+        } catch (_) {}
+      });
+    }
+  }
+
+  setupDataManagement() {
+    if (!this.btnDeleteAll) return;
+
+    this.btnDeleteAll.addEventListener('click', async () => {
+      if (!this.deleteConfirmState) {
+        this.deleteConfirmState = true;
+        this.btnDeleteAll.classList.add('sure');
+        this.btnDeleteAll.textContent = 'Yes, delete everything';
+
+        this.deleteTimeout = setTimeout(() => {
+          this.resetDeleteButton();
+        }, 4000);
+        return;
+      }
+
+      // Second click: execute wipe
+      clearTimeout(this.deleteTimeout);
+      this.resetDeleteButton();
+
+      try {
+        await store.clearAllSessions();
+        this.close();
+      } catch (err) {
+        console.error('Failed to clear conversations:', err);
+      }
+    });
+  }
+
+  resetDeleteButton() {
+    this.deleteConfirmState = false;
+    if (this.btnDeleteAll) {
+      this.btnDeleteAll.classList.remove('sure');
+      this.btnDeleteAll.textContent = 'Delete all conversations';
+    }
+  }
+
+  bindRegistryControls() {
+    if (this.tempRange) {
+      bindFeatureControl(this.tempRange, 'model.temperature_tune');
+    }
+    if (this.sysPromptInput) {
+      bindFeatureControl(this.sysPromptInput, 'model.system_prompt');
+    }
   }
 
   isOpen() {
-    return this.backdrop.classList.contains('open');
+    return this.backdrop.classList.contains('on') || this.backdrop.getAttribute('aria-hidden') === 'false';
   }
 
-  open(tabName = 'general') {
+  open(paneId = 'p1') {
     this.previousFocusedElement = document.activeElement;
-    this.backdrop.classList.add('open');
+    this.backdrop.classList.add('on');
     this.backdrop.setAttribute('aria-hidden', 'false');
+    this.resetDeleteButton();
 
-    // Switch to specified tab
-    const tabBtn = this.backdrop.querySelector(`.tab-btn[data-tab="${tabName}"]`);
-    if (tabBtn) {
-      tabBtn.click();
-    }
+    const normalizedPane = paneId === 'workspace' || paneId === 'general' ? 'p1'
+      : (paneId === 'model' || paneId === 'models' ? 'p2'
+      : (paneId === 'data' || paneId === 'about' ? 'p3' : paneId));
 
-    // Trap focus to close button
+    this.switchPane(normalizedPane);
+
+    // Focus close button
     if (this.closeBtn) {
       this.closeBtn.focus();
     }
   }
 
   close() {
-    this.backdrop.classList.remove('open');
+    this.resetDeleteButton();
+    this.backdrop.classList.remove('on');
     this.backdrop.setAttribute('aria-hidden', 'true');
     if (this.previousFocusedElement && typeof this.previousFocusedElement.focus === 'function') {
       this.previousFocusedElement.focus();
