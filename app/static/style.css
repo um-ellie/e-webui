@@ -253,7 +253,12 @@ aside, .sidebar {
   padding: 14px 12px;
   gap: 10px;
   flex: none;
-  transition: margin .25s, background .25s;
+  transition: width .25s cubic-bezier(0.4, 0, 0.2, 1), padding .25s ease, background .25s;
+  overflow: hidden;
+}
+
+.logo-mark {
+  display: none;
 }
 
 .brand {
@@ -446,8 +451,67 @@ aside, .sidebar {
 }
 
 body.sbc aside, aside.collapsed {
-  margin-left: -264px;
-  visibility: hidden;
+  width: 64px;
+  padding: 14px 8px;
+  visibility: visible;
+  margin-left: 0;
+}
+
+body.sbc aside .logo-full, aside.collapsed .logo-full {
+  display: none;
+}
+
+body.sbc aside .logo-mark, aside.collapsed .logo-mark {
+  display: block;
+}
+
+body.sbc aside .brand, aside.collapsed .brand {
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 0 6px;
+  align-items: center;
+}
+
+body.sbc aside .btn-new-chat, aside.collapsed .btn-new-chat,
+body.sbc aside .search-box, aside.collapsed .search-box,
+body.sbc aside .session-list, aside.collapsed .session-list,
+body.sbc aside .sidebar-nav, aside.collapsed .sidebar-nav,
+body.sbc aside .foot .btn-open-settings, aside.collapsed .foot .btn-open-settings {
+  display: none !important;
+}
+
+body.sbc aside .foot, aside.collapsed .foot {
+  justify-content: center;
+  padding-top: 8px;
+}
+
+body.sbc aside .conn, aside.collapsed .conn {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+}
+
+body.sbc aside .conn .i, aside.collapsed .conn .i,
+body.sbc aside .conn #clabel, aside.collapsed .conn #clabel,
+body.sbc aside .conn #cms, aside.collapsed .conn #cms {
+  display: none;
+}
+
+body.sbc aside .conn .dot, aside.collapsed .conn .dot {
+  width: 10px;
+  height: 10px;
+  margin: 0;
+}
+
+body.sbc aside #cpop, aside.collapsed #cpop {
+  left: 0;
+  right: auto;
+  min-width: 250px;
 }
 
 #opensb {
@@ -1262,4 +1326,215 @@ details.sc summary {
     width: 100%;
     padding: 0 14px;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Toast Notifications System
+   -------------------------------------------------------------------------- */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 90vw;
+}
+
+.toast-card {
+  background: var(--panel);
+  color: var(--tx);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  box-shadow: var(--sh);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(10px) scale(0.97);
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toast-card.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.toast-card.dismissed {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+}
+
+.toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.toast-icon .i {
+  width: 16px;
+  height: 16px;
+}
+
+.toast-success .toast-icon {
+  color: var(--sd);
+}
+
+.toast-error .toast-icon {
+  color: var(--danger);
+}
+
+.toast-info .toast-icon,
+.toast-warning .toast-icon {
+  color: var(--rose);
+}
+
+/* --------------------------------------------------------------------------
+   In-App Modal Dialogs (Confirm & Prompt)
+   -------------------------------------------------------------------------- */
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 16, 0.45);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  padding: 16px;
+}
+
+.app-dialog-backdrop.open {
+  opacity: 1;
+}
+
+.app-dialog-backdrop.closing {
+  opacity: 0;
+}
+
+.app-dialog-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--sh);
+  width: min(440px, 100%);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-dialog-backdrop.open .app-dialog-card {
+  transform: translateY(0) scale(1);
+}
+
+.app-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.app-dialog-title {
+  font: 500 18px var(--s);
+  color: var(--tx);
+  margin: 0;
+}
+
+.app-dialog-body {
+  font-size: 14px;
+  color: var(--tx);
+  line-height: 1.5;
+}
+
+.app-dialog-message {
+  margin: 0;
+  color: var(--tx);
+}
+
+.app-dialog-input-wrap {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-dialog-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--tx);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.app-dialog-input:focus {
+  border-color: var(--sage);
+}
+
+.app-dialog-error {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-dialog-cancel {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--side);
+  color: var(--tx);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.btn-dialog-cancel:hover {
+  background: var(--tint);
+}
+
+.btn-dialog-confirm {
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-dialog-confirm.btn-primary {
+  background: var(--sd);
+  color: #fff;
+}
+
+.btn-dialog-confirm.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-dialog-confirm:hover {
+  opacity: 0.9;
 }

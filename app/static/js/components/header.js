@@ -7,6 +7,8 @@ import { store } from '../store.js';
 import { themeManager } from '../theme.js';
 import { bindFeatureControl } from '../features.js';
 import { exportSession } from '../export.js';
+import { showToast } from '../toast.js';
+import { showConfirmDialog, showPromptDialog } from './dialog.js';
 
 export class Header {
   constructor(container) {
@@ -45,6 +47,13 @@ export class Header {
   bindRegistryControls() {
     if (this.btnShare) {
       bindFeatureControl(this.btnShare, 'chat.share');
+      this.btnShare.addEventListener('click', (e) => {
+        e.preventDefault();
+        const session = store.getActiveSession();
+        if (session) {
+          exportSession(session, 'markdown');
+        }
+      });
     }
   }
 
@@ -113,43 +122,25 @@ export class Header {
   setupTitleEditing() {
     if (!this.titleElement) return;
 
-    this.titleElement.addEventListener('click', () => {
+    this.titleElement.addEventListener('click', async () => {
       const session = store.getActiveSession();
       if (!session) return;
 
       const currentTitle = session.title || 'New conversation';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'header-chat-title editing';
-      input.value = currentTitle;
-      input.maxLength = 120;
-      input.style.cssText = 'padding:4px 10px;border-radius:8px;border:1px solid var(--sd);background:var(--panel);color:var(--tx);font:inherit;outline:none;';
-
-      const save = () => {
-        const newTitle = input.value.trim() || 'New conversation';
-        store.updateSession(session.id, { title: newTitle });
-        if (input.parentElement) {
-          input.replaceWith(this.titleElement);
-        }
-        if (this.titleTextElement) {
-          this.titleTextElement.textContent = newTitle;
-        }
-      };
-
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          save();
-        } else if (e.key === 'Escape') {
-          if (input.parentElement) {
-            input.replaceWith(this.titleElement);
-          }
-        }
+      const newTitle = await showPromptDialog({
+        title: 'Rename conversation',
+        message: 'Enter a new title for this conversation:',
+        defaultValue: currentTitle,
+        placeholder: 'Conversation title',
+        confirmText: 'Save',
+        cancelText: 'Cancel',
+        maxLength: 120
       });
-      input.addEventListener('blur', save);
 
-      this.titleElement.replaceWith(input);
-      input.focus();
-      input.select();
+      if (newTitle !== null && newTitle.trim()) {
+        store.updateSession(session.id, { title: newTitle.trim() });
+        showToast('Chat renamed', 'success');
+      }
     });
   }
 
@@ -195,45 +186,49 @@ export class Header {
 
     const btnRename = popover.querySelector('#more-rename');
     if (btnRename) {
-      btnRename.addEventListener('click', () => {
+      btnRename.addEventListener('click', async () => {
         toggle(false);
         const session = store.getActiveSession();
         if (!session) return;
-        const newTitle = prompt('Rename conversation:', session.title);
+
+        const currentTitle = session.title || 'New conversation';
+        const newTitle = await showPromptDialog({
+          title: 'Rename conversation',
+          message: 'Enter a new title for this conversation:',
+          defaultValue: currentTitle,
+          placeholder: 'Conversation title',
+          confirmText: 'Save',
+          cancelText: 'Cancel',
+          maxLength: 120
+        });
+
         if (newTitle !== null && newTitle.trim()) {
           store.updateSession(session.id, { title: newTitle.trim() });
+          showToast('Chat renamed', 'success');
         }
       });
     }
 
     const btnDelete = popover.querySelector('#delchat');
     if (btnDelete) {
-      let confirmDelete = false;
-      let deleteTimeout = null;
-
-      btnDelete.addEventListener('click', () => {
+      btnDelete.addEventListener('click', async () => {
+        toggle(false);
         const session = store.getActiveSession();
         if (!session) return;
 
-        if (!confirmDelete) {
-          confirmDelete = true;
-          btnDelete.textContent = 'Click again to confirm delete';
-          btnDelete.style.fontWeight = 'bold';
+        const sessionTitle = session.title || 'New conversation';
+        const confirmed = await showConfirmDialog({
+          title: 'Delete this chat?',
+          message: `Are you sure you want to delete "${sessionTitle}"? This action cannot be undone.`,
+          confirmText: 'Delete',
+          cancelText: 'Cancel',
+          danger: true
+        });
 
-          deleteTimeout = setTimeout(() => {
-            confirmDelete = false;
-            btnDelete.textContent = 'Delete this chat';
-            btnDelete.style.fontWeight = 'normal';
-          }, 4000);
-          return;
+        if (confirmed) {
+          store.deleteSession(session.id);
+          showToast('Chat deleted', 'info');
         }
-
-        clearTimeout(deleteTimeout);
-        confirmDelete = false;
-        btnDelete.textContent = 'Delete this chat';
-        btnDelete.style.fontWeight = 'normal';
-        toggle(false);
-        store.deleteSession(session.id);
       });
     }
   }

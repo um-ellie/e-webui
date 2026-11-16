@@ -125,6 +125,14 @@ class HealthManager {
     return this.current;
   }
 
+  /**
+   * Alias for probe()
+   * @returns {Promise<NormalizedHealth>}
+   */
+  async checkNow() {
+    return this.probe();
+  }
+
   startPolling(intervalMs = 30000) {
     this.pollInterval = intervalMs;
     this.stopPolling();

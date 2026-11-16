@@ -8,6 +8,8 @@
 import { store } from '../store.js';
 import { healthManager } from '../health.js';
 import { bindFeatureControl } from '../features.js';
+import { api } from '../api.js';
+import { showToast } from '../toast.js';
 
 const SIDEBAR_COLLAPSED_KEY = 'ewebui_sidebar_collapsed';
 
@@ -146,9 +148,27 @@ export class Sidebar {
     if (this.retestBtn) {
       this.retestBtn.addEventListener('click', async () => {
         this.retestBtn.disabled = true;
-        this.retestBtn.textContent = 'Checking…';
+        this.retestBtn.innerHTML = '<span class="dot" style="display:inline-block;margin-inline-end:6px"></span>Checking…';
         try {
-          await healthManager.checkNow();
+          const snapshot = await healthManager.probe();
+          if (snapshot.status === 'online' || snapshot.status === 'degraded') {
+            let modelCount = 0;
+            try {
+              const modelRes = await api.getModels();
+              if (modelRes && Array.isArray(modelRes.models)) {
+                modelCount = modelRes.models.length;
+              }
+            } catch (_) {}
+
+            const modelText = modelCount === 1 ? '1 model available' : `${modelCount} models available`;
+            showToast(`Connected to Ollama · ${modelText}`, 'success');
+            store.emit('models:reload');
+          } else {
+            const err = snapshot.errorMessage || 'Cannot connect to Ollama';
+            showToast(`Connection failed: ${err}`, 'error');
+          }
+        } catch (err) {
+          showToast(`Connection failed: ${err.message || 'Error'}`, 'error');
         } finally {
           this.retestBtn.disabled = false;
           this.retestBtn.innerHTML = '<svg class="i"><use href="#rl"/></svg>Reconnect and test';

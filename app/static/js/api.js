@@ -65,6 +65,13 @@ export class ApiClient {
   }
 
   /**
+   * Alias for getModels() for contract compatibility
+   */
+  async listModels() {
+    return this.getModels();
+  }
+
+  /**
    * Dispatches model inference and reads SSE response stream
    * @param {{ model: string, prompt: string, history?: Array<{role: string, content: string}>, system?: string, stream?: boolean, thinking?: boolean, temperature?: number }} payload
    * @param {{

@@ -5,8 +5,11 @@
  * Contract: specs/016-chat-history-persistence/contracts/export-schema.json
  */
 
+import { showToast } from './toast.js';
+
 /**
  * Sanitizes a title string into a safe, clean filename slug with a datestamp.
+ * Preserves alphanumeric characters including Persian/Arabic Unicode letters.
  * @param {string} rawTitle
  * @param {'md' | 'json'} extension
  * @param {Date} [now=new Date()]
@@ -14,11 +17,10 @@
  */
 export function sanitizeFilename(rawTitle, extension, now = new Date()) {
   const clean = String(rawTitle || '')
-    .replace(/[^\w\s\-]/g, '')
+    .replace(/[\/\\?%*:|"<>]/g, '')
     .trim()
     .replace(/[\s_]+/g, '-')
-    .toLowerCase()
-    .slice(0, 48);
+    .slice(0, 64);
 
   const slug = clean || 'conversation';
   const year = now.getFullYear();
@@ -181,15 +183,29 @@ export function downloadFile(content, filename, mimeType) {
  * @param {'markdown' | 'json'} [format='markdown']
  */
 export function exportSession(session, format = 'markdown') {
-  if (!session) return;
+  if (!session) return false;
 
-  if (format === 'json') {
-    const jsonStr = formatJson(session);
-    const filename = sanitizeFilename(session.title, 'json');
-    downloadFile(jsonStr, filename, 'application/json;charset=utf-8');
-  } else {
-    const mdStr = formatMarkdown(session);
-    const filename = sanitizeFilename(session.title, 'md');
-    downloadFile(mdStr, filename, 'text/markdown;charset=utf-8');
+  const messages = session.messages || [];
+  if (messages.length === 0) {
+    showToast('Cannot export an empty chat', 'warning');
+    return false;
+  }
+
+  try {
+    if (format === 'json') {
+      const jsonStr = formatJson(session);
+      const filename = sanitizeFilename(session.title, 'json');
+      downloadFile(jsonStr, filename, 'application/json;charset=utf-8');
+      showToast('Chat exported as JSON', 'success');
+    } else {
+      const mdStr = formatMarkdown(session);
+      const filename = sanitizeFilename(session.title, 'md');
+      downloadFile(mdStr, filename, 'text/markdown;charset=utf-8');
+      showToast('Chat exported as Markdown', 'success');
+    }
+    return true;
+  } catch (err) {
+    showToast(`Export failed: ${err.message || 'Unknown error'}`, 'error');
+    return false;
   }
 }

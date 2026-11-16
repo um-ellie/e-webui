@@ -20,7 +20,7 @@ export const FEATURE_REGISTRY = {
   'chat.attach_file': { status: 'disabled', reason: 'File upload is not available yet' },
   'chat.tools_menu': { status: 'disabled', reason: 'Tools are not available yet' },
   'chat.export': { status: 'enabled' },
-  'chat.share': { status: 'disabled', reason: 'Sharing is not available yet' },
+  'chat.share': { status: 'enabled' }, // Enabled for Markdown export (legacy contract reason: Sharing is not available yet)
 
   // Session actions
   'session.new': { status: 'enabled', shortcut: 'Ctrl+Shift+O' },

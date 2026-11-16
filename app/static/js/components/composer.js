@@ -8,6 +8,9 @@ import { store } from '../store.js';
 import { api } from '../api.js';
 import { bindFeatureControl } from '../features.js';
 import { presetsService } from '../presets.js';
+import { showToast } from '../toast.js';
+
+export { showToast };
 
 function escapeHtml(text) {
   return String(text || '')
@@ -16,25 +19,6 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
-
-export function showToast(message, duration = 3500) {
-  let toastContainer = document.getElementById('toast-container');
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'toast-container';
-    toastContainer.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
-    document.body.appendChild(toastContainer);
-  }
-  const toast = document.createElement('div');
-  toast.className = 'toast-card';
-  toast.style.cssText = 'background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:13px;box-shadow:var(--sh);display:flex;align-items:center;gap:8px;pointer-events:auto;transition:opacity 0.2s ease;';
-  toast.innerHTML = `<svg class="i" style="width:16px;height:16px;color:var(--rose)"><use href="#act"/></svg><span>${escapeHtml(message)}</span>`;
-  toastContainer.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 250);
-  }, duration);
 }
 
 export class ModelPicker {
@@ -47,6 +31,8 @@ export class ModelPicker {
 
     this.models = [];
     this.selectedModel = '';
+    this.isLoading = false;
+    this.isOffline = false;
 
     this.init();
   }
@@ -60,6 +46,10 @@ export class ModelPicker {
         this.selectModel(session.model, false);
       }
     });
+
+    store.on('models:reload', () => {
+      this.loadModels();
+    });
   }
 
   setupListeners() {
@@ -69,6 +59,10 @@ export class ModelPicker {
         this.popover.classList.toggle('on', isExpanded);
         this.popover.hidden = !isExpanded;
         this.pillBtn.setAttribute('aria-expanded', String(isExpanded));
+
+        if (isExpanded && this.models.length === 0) {
+          this.loadModels();
+        }
       };
 
       this.pillBtn.addEventListener('click', (e) => {
@@ -92,9 +86,12 @@ export class ModelPicker {
   }
 
   async loadModels() {
+    if (this.isLoading) return;
+    this.isLoading = true;
     try {
-      const res = await api.listModels();
+      const res = await api.getModels();
       this.models = res && res.models ? res.models : [];
+      this.isOffline = false;
       this.renderItems();
 
       const session = store.getActiveSession();
@@ -109,19 +106,37 @@ export class ModelPicker {
       }
     } catch (err) {
       console.warn('Failed to load models:', err);
-      if (this.nameEl) this.nameEl.textContent = 'Models unavailable';
+      this.models = [];
+      this.isOffline = true;
+      if (this.nameEl && (!this.selectedModel || this.nameEl.textContent === 'Loading…')) {
+        this.nameEl.textContent = 'Ollama offline';
+      }
+      this.renderItems('Ollama is offline');
+    } finally {
+      this.isLoading = false;
     }
   }
 
-  renderItems() {
+  renderItems(customMessage = null) {
     if (!this.listContainer) return;
     this.listContainer.innerHTML = '';
 
+    if (customMessage) {
+      const msgEl = document.createElement('div');
+      msgEl.className = 'it it-msg';
+      msgEl.textContent = customMessage;
+      msgEl.style.color = 'var(--danger)';
+      msgEl.style.justifyContent = 'center';
+      this.listContainer.appendChild(msgEl);
+      return;
+    }
+
     if (this.models.length === 0) {
       const empty = document.createElement('div');
-      empty.className = 'it';
-      empty.textContent = 'No models found in Ollama';
+      empty.className = 'it it-msg';
+      empty.textContent = this.isOffline ? 'Ollama is offline' : 'No models found';
       empty.style.color = 'var(--mu)';
+      empty.style.justifyContent = 'center';
       this.listContainer.appendChild(empty);
       return;
     }
@@ -135,12 +150,18 @@ export class ModelPicker {
       const sizeStr = m.parameter_size || (m.size ? `${(m.size / (1024 * 1024 * 1024)).toFixed(1)} GB` : '');
       btn.innerHTML = `<span>${escapeHtml(m.name)}</span>${sizeStr ? `<em>${escapeHtml(sizeStr)}</em>` : ''}`;
 
+      if (m.name === this.selectedModel) {
+        btn.style.fontWeight = '600';
+        btn.style.background = 'var(--tint)';
+      }
+
       btn.addEventListener('click', () => {
         this.selectModel(m.name, true);
         if (this.popover) {
           this.popover.classList.remove('on');
           this.popover.hidden = true;
           this.pillBtn.setAttribute('aria-expanded', 'false');
+          this.pillBtn.focus();
         }
       });
 
