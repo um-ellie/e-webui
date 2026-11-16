@@ -225,6 +225,7 @@ export class Sidebar {
     }
 
     this.connBtn.classList.add(stateClass);
+    this.connBtn.setAttribute('title', `Ollama: ${label} (${sub})`);
     if (this.cLabel) this.cLabel.textContent = label;
     if (this.cMs) this.cMs.textContent = sub;
 

@@ -166,15 +166,19 @@ export function downloadFile(content, filename, mimeType) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  a.style.display = 'none';
+  a.style.position = 'fixed';
+  a.style.left = '-9999px';
+  a.style.opacity = '0';
 
   document.body.appendChild(a);
   a.click();
 
   setTimeout(() => {
-    document.body.removeChild(a);
+    if (a.parentElement) {
+      document.body.removeChild(a);
+    }
     URL.revokeObjectURL(url);
-  }, 100);
+  }, 30000);
 }
 
 /**
@@ -183,11 +187,8 @@ export function downloadFile(content, filename, mimeType) {
  * @param {'markdown' | 'json'} [format='markdown']
  */
 export function exportSession(session, format = 'markdown') {
-  if (!session) return false;
-
-  const messages = session.messages || [];
-  if (messages.length === 0) {
-    showToast('Cannot export an empty chat', 'warning');
+  if (!session) {
+    showToast('No active conversation to export', 'warning');
     return false;
   }
 

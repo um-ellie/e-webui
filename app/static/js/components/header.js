@@ -15,7 +15,7 @@ export class Header {
     this.container = container;
     this.titleElement = container.querySelector('.header-chat-title') || container.querySelector('#ttl');
     this.titleTextElement = container.querySelector('#ttl-text') || this.titleElement;
-    this.btnShare = container.querySelector('.btn-share');
+    this.btnShare = container.querySelector('.btn-share') || container.querySelector('#btn-share');
     this.btnOverflow = container.querySelector('.btn-header-overflow') || container.querySelector('#more');
     this.morePopover = container.querySelector('#morepop');
     this.mobileToggle = container.querySelector('.mobile-menu-toggle') || container.querySelector('#opensb');
@@ -25,7 +25,7 @@ export class Header {
   }
 
   init() {
-    this.bindRegistryControls();
+    this.setupShareButton();
     this.setupTitleEditing();
     this.setupMobileToggle();
     this.setupThemeSwitcher();
@@ -44,17 +44,23 @@ export class Header {
     this.update(store.getActiveSession());
   }
 
-  bindRegistryControls() {
-    if (this.btnShare) {
-      bindFeatureControl(this.btnShare, 'chat.share');
-      this.btnShare.addEventListener('click', (e) => {
-        e.preventDefault();
-        const session = store.getActiveSession();
-        if (session) {
-          exportSession(session, 'markdown');
-        }
-      });
-    }
+  setupShareButton() {
+    if (!this.btnShare) return;
+    this.btnShare.disabled = false;
+    this.btnShare.classList.remove('disabled');
+    this.btnShare.removeAttribute('aria-disabled');
+    this.btnShare.setAttribute('title', 'Export conversation as Markdown');
+
+    this.btnShare.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const session = store.getActiveSession();
+      if (session) {
+        exportSession(session, 'markdown');
+      } else {
+        showToast('No active conversation to export', 'warning');
+      }
+    });
   }
 
   setupMobileToggle() {
