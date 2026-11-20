@@ -17,6 +17,7 @@ export class EmptyState {
 
   init() {
     this.updateGreeting();
+    this.setupStarters();
 
     store.on('session:active-changed', (session) => this.updateVisibility(session));
     store.on('message:appended', () => {
@@ -26,6 +27,25 @@ export class EmptyState {
 
     // Initial check
     this.updateVisibility(store.getActiveSession());
+  }
+
+  setupStarters() {
+    const starterButtons = this.container.querySelectorAll('.starter-card');
+    starterButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const prompt = btn.dataset.prompt;
+        if (!prompt) return;
+        const textarea = document.querySelector('#ta') || document.querySelector('.composer-textarea');
+        if (textarea) {
+          textarea.value = prompt;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.focus();
+          if (typeof textarea.setSelectionRange === 'function') {
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+          }
+        }
+      });
+    });
   }
 
   getTimeGreeting() {

@@ -227,3 +227,20 @@ export function dbDeleteFromIndex(storeName, indexName, query) {
 export function dbClear(storeName) {
   return withTransaction(storeName, 'readwrite', (store) => store.clear());
 }
+
+/**
+ * Updates a session's pinned state in the sessions store.
+ * @param {string} sessionId
+ * @param {boolean} isPinned
+ * @returns {Promise<any>}
+ */
+export async function dbSetSessionPinned(sessionId, isPinned) {
+  const session = await dbGet('sessions', sessionId);
+  if (session) {
+    session.pinned = Boolean(isPinned);
+    await dbSet('sessions', session);
+    return session;
+  }
+  return null;
+}
+

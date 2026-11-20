@@ -21,6 +21,8 @@
   <script>
     (function () {
       try {
+        var p = localStorage.getItem('ewebui_palette') || 'matcha';
+        document.documentElement.dataset.palette = p;
         var t = localStorage.getItem('ewebui_theme') || localStorage.getItem('theme') || 'system';
         var isDark = t === 'dark' || (t === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
@@ -59,9 +61,13 @@
       <symbol id="pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
       <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
       <symbol id="ok" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+      <symbol id="check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
       <symbol id="cp" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></symbol>
       <symbol id="spk" viewBox="0 0 24 24"><path d="M11 5L6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6"/></symbol>
+      <symbol id="sound-wave" viewBox="0 0 24 24"><path d="M3 10v4M7 6v12M11 3v18M15 6v12M19 8v8M23 11v2"/></symbol>
       <symbol id="rl" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></symbol>
+      <symbol id="retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></symbol>
+      <symbol id="pin" viewBox="0 0 24 24"><path d="M12 17v5M5 7l2-2 10 10-2 2M9 5l4 4M15 11l4 4"/></symbol>
       <symbol id="pnl" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></symbol>
       <symbol id="usr" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
       <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
@@ -186,6 +192,51 @@
           <div class="hello empty-state" id="empty-state">
             <h1 class="empty-greeting" id="empty-greeting">Good evening</h1>
             <p id="empty-sub">How can I help you today?</p>
+            <div class="starters-grid" id="starters-grid">
+              <button type="button" class="starter-card" data-prompt="نکات کلیدی و چکیده متن زیر را با فرمت بالت پوینت استخراج کن:&#10;">
+                <div class="starter-top">
+                  <span class="starter-badge badge-matcha">
+                    <svg class="i"><use href="#clip"/></svg>
+                    تحلیل و خلاصه
+                  </span>
+                </div>
+                <div class="starter-title">خلاصه‌سازی و استخراج نکات</div>
+                <div class="starter-desc">تحلیل هوشمند و ارائه ساختاریافته متن</div>
+              </button>
+
+              <button type="button" class="starter-card" data-prompt="یک تابع پایتون تمیز، بهینه و دارای Type Hint و تست بنویس برای:&#10;">
+                <div class="starter-top">
+                  <span class="starter-badge badge-ocean">
+                    <svg class="i"><use href="#tool"/></svg>
+                    توسعه و کدنویسی
+                  </span>
+                </div>
+                <div class="starter-title">کدنویسی و حل مسئله</div>
+                <div class="starter-desc">تولید توابع بهینه پایتون و الگوریتم‌ها</div>
+              </button>
+
+              <button type="button" class="starter-card" data-prompt="۵ ایده خلاقانه، نوآورانه و متمایز برای موضوع زیر پیشنهاد بده:&#10;">
+                <div class="starter-top">
+                  <span class="starter-badge badge-lavender">
+                    <svg class="i"><use href="#bulb"/></svg>
+                    خلاقیت و ایده
+                  </span>
+                </div>
+                <div class="starter-title">ایده‌پردازی و استراتژی</div>
+                <div class="starter-desc">پیشنهاد زوایای دید نو و خلاقانه</div>
+              </button>
+
+              <button type="button" class="starter-card" data-prompt="متن زیر را از نظر لحن، املا، گرامر و شیوایی ویراستاری و بازنویسی کن:&#10;">
+                <div class="starter-top">
+                  <span class="starter-badge badge-peach">
+                    <svg class="i"><use href="#pen"/></svg>
+                    نگارش و ادب
+                  </span>
+                </div>
+                <div class="starter-title">ویرایش و بهبود نگارش</div>
+                <div class="starter-desc">روان‌سازی، لحن حرفه‌ای و بازنویسی ادبی</div>
+              </button>
+            </div>
           </div>
 
           <!-- Message Turns Container -->
@@ -291,6 +342,27 @@
               <button role="radio" data-m="light" aria-label="Light" title="Light" type="button"><svg class="i"><use href="#sun"/></svg></button>
               <button role="radio" data-m="dark" aria-label="Dark" title="Dark" type="button"><svg class="i"><use href="#moon"/></svg></button>
               <button role="radio" data-m="system" aria-label="System" title="System" type="button"><svg class="i"><use href="#mon"/></svg></button>
+            </div>
+          </div>
+          <div class="fld">
+            <label>Pastel Palette</label>
+            <div class="palette-grid" role="radiogroup" aria-label="Pastel Palette" id="palette-selector">
+              <button role="radio" type="button" class="palette-card active" data-palette-val="matcha" aria-checked="true" title="Matcha & Sand (سیج و ماسه)">
+                <span class="palette-swatch" style="background: linear-gradient(135deg, #5fc79b 0%, #fff9ef 100%);"></span>
+                <span class="palette-title">Matcha</span>
+              </button>
+              <button role="radio" type="button" class="palette-card" data-palette-val="lavender" aria-checked="false" title="Lavender Breeze (اسطوخودوس)">
+                <span class="palette-swatch" style="background: linear-gradient(135deg, #8c7ae6 0%, #f9f8fe 100%);"></span>
+                <span class="palette-title">Lavender</span>
+              </button>
+              <button role="radio" type="button" class="palette-card" data-palette-val="peach" aria-checked="false" title="Peach Sorbet (هلویی و رز)">
+                <span class="palette-swatch" style="background: linear-gradient(135deg, #f7826a 0%, #fff8f4 100%);"></span>
+                <span class="palette-title">Peach</span>
+              </button>
+              <button role="radio" type="button" class="palette-card" data-palette-val="ocean" aria-checked="false" title="Ocean Mist (اقیانوس آرام)">
+                <span class="palette-swatch" style="background: linear-gradient(135deg, #38ada9 0%, #f2faf9 100%);"></span>
+                <span class="palette-title">Ocean</span>
+              </button>
             </div>
           </div>
           <div class="fld">

@@ -246,6 +246,43 @@ export class ChatView {
       bubble.textContent = msg.content;
       applyDirectionToElement(bubble, msg.content);
       row.appendChild(bubble);
+
+      const userDock = document.createElement('div');
+      userDock.className = 'message-actions msg-dock user-msg-dock';
+
+      const btnEdit = document.createElement('button');
+      btnEdit.className = 'btn-icon';
+      btnEdit.type = 'button';
+      btnEdit.title = 'Edit prompt';
+      btnEdit.setAttribute('aria-label', 'Edit prompt');
+      btnEdit.innerHTML = '<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
+      btnEdit.addEventListener('click', () => {
+        const textarea = document.querySelector('#ta') || document.querySelector('.composer-textarea');
+        if (textarea) {
+          textarea.value = msg.content;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.focus();
+        }
+      });
+      userDock.appendChild(btnEdit);
+
+      const btnUserCopy = document.createElement('button');
+      btnUserCopy.className = 'btn-icon';
+      btnUserCopy.type = 'button';
+      btnUserCopy.title = 'Copy message';
+      btnUserCopy.setAttribute('aria-label', 'Copy message');
+      btnUserCopy.innerHTML = '<svg class="i" viewBox="0 0 24 24"><use href="#cp"/></svg>';
+      btnUserCopy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(msg.content);
+          btnUserCopy.innerHTML = '<svg class="i" viewBox="0 0 24 24"><use href="#check"/></svg>';
+          setTimeout(() => {
+            btnUserCopy.innerHTML = '<svg class="i" viewBox="0 0 24 24"><use href="#cp"/></svg>';
+          }, 1800);
+        } catch (_) {}
+      });
+      userDock.appendChild(btnUserCopy);
+      row.appendChild(userDock);
     } else {
       // Assistant message
       if (msg.status === 'error') {
@@ -303,7 +340,7 @@ export class ChatView {
    */
   createThoughtBlock(reasoning, isStreaming = false, startTime = null) {
     const wrap = document.createElement('div');
-    wrap.className = 'thought-wrapper';
+    wrap.className = `thought-wrapper thought-box ${isStreaming ? 'is-streaming' : ''}`;
 
     const chip = document.createElement('button');
     chip.type = 'button';
@@ -374,8 +411,10 @@ export class ChatView {
       const label = wrap.querySelector('.thought-label');
       if (label) {
         if (isStreaming) {
+          wrap.classList.add('is-streaming');
           label.textContent = 'Thinking…';
         } else {
+          wrap.classList.remove('is-streaming');
           const secs = startTime ? Math.max(1, Math.round((Date.now() - startTime) / 1000)) : 1;
           label.textContent = `Thought for ${secs} seconds`;
         }
@@ -431,7 +470,7 @@ Message: ${escapeHtml(msg.error || msg.content || 'Unknown error')}</code></pre>
    */
   createMessageActions(msg) {
     const bar = document.createElement('div');
-    bar.className = 'message-actions';
+    bar.className = 'message-actions msg-dock';
 
     // Copy action
     const btnCopy = document.createElement('button');

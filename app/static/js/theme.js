@@ -6,15 +6,17 @@
  */
 
 const THEME_STORAGE_KEY = 'ewebui_theme';
+const PALETTE_STORAGE_KEY = 'ewebui_palette';
 const FONT_SCALE_KEY = 'ewebui_font_scale';
 
 export class ThemeManager {
   constructor() {
     this.mediaQuery = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
     this.currentTheme = this.getSavedTheme();
+    this.currentPalette = this.getSavedPalette();
     this.currentFontScale = this.getSavedFontScale();
 
-    /** @type {Set<(theme: string, effectiveTheme: string) => void>} */
+    /** @type {Set<(theme: string, effectiveTheme: string, palette: string) => void>} */
     this.listeners = new Set();
 
     this.init();
@@ -28,6 +30,14 @@ export class ThemeManager {
     }
   }
 
+  getSavedPalette() {
+    try {
+      return localStorage.getItem(PALETTE_STORAGE_KEY) || 'matcha';
+    } catch {
+      return 'matcha';
+    }
+  }
+
   getSavedFontScale() {
     try {
       return parseInt(localStorage.getItem(FONT_SCALE_KEY) || '100', 10);
@@ -37,6 +47,7 @@ export class ThemeManager {
   }
 
   init() {
+    this.applyPalette(this.currentPalette);
     this.applyTheme(this.currentTheme);
     this.applyFontScale(this.currentFontScale);
 
@@ -47,6 +58,45 @@ export class ThemeManager {
         }
       });
     }
+  }
+
+  /**
+   * Set pastel color palette
+   * @param {'matcha' | 'lavender' | 'peach' | 'ocean'} paletteId
+   */
+  setPalette(paletteId) {
+    const valid = ['matcha', 'lavender', 'peach', 'ocean'];
+    const p = valid.includes(paletteId) ? paletteId : 'matcha';
+    this.currentPalette = p;
+    try {
+      localStorage.setItem(PALETTE_STORAGE_KEY, p);
+    } catch (e) {
+      console.warn('Failed to persist palette:', e);
+    }
+    this.applyPalette(p);
+  }
+
+  /**
+   * Apply palette attribute to documentElement and sync UI controls
+   * @param {string} paletteId
+   */
+  applyPalette(paletteId) {
+    if (typeof document !== 'undefined') {
+      document.documentElement.dataset.palette = paletteId;
+
+      // Sync any palette selector buttons [data-palette-btn]
+      const buttons = document.querySelectorAll('button[data-palette-val]');
+      buttons.forEach((btn) => {
+        const isSelected = btn.dataset.paletteVal === paletteId;
+        btn.setAttribute('aria-checked', String(isSelected));
+        btn.classList.toggle('active', isSelected);
+      });
+
+      const effective = document.documentElement.dataset.theme || 'light';
+      this.updateThemeMeta(effective);
+    }
+
+    this._notifyListeners();
   }
 
   /**
@@ -93,9 +143,15 @@ export class ThemeManager {
       this.updateThemeMeta(effective);
     }
 
+    this._notifyListeners();
+  }
+
+  _notifyListeners() {
+    const isDark = (this.currentTheme === 'dark') || (this.currentTheme === 'system' && this.mediaQuery && this.mediaQuery.matches);
+    const effective = isDark ? 'dark' : 'light';
     for (const fn of this.listeners) {
       try {
-        fn(mode, effective);
+        fn(this.currentTheme, effective, this.currentPalette);
       } catch (e) {
         console.error('Theme listener error:', e);
       }

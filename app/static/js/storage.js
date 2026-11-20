@@ -170,7 +170,8 @@ export class StorageService {
       createdAt: session.createdAt,
       updatedAt: session.updatedAt || Date.now(),
       model: session.model,
-      systemPrompt: session.systemPrompt || null
+      systemPrompt: session.systemPrompt || null,
+      pinned: Boolean(session.pinned)
     };
 
     if (this.driver === 'indexeddb') {
@@ -460,6 +461,20 @@ export class StorageService {
     this.memoryStore.sessions.clear();
     this.memoryStore.messages.clear();
     this.memoryStore.preferences.clear();
+  }
+
+  /**
+   * Toggles the pinned status of a session.
+   * @param {string} sessionId
+   * @returns {Promise<boolean>} new pinned status
+   */
+  async togglePinSession(sessionId) {
+    await this.init();
+    const session = await this.getSession(sessionId);
+    if (!session) return false;
+    session.pinned = !session.pinned;
+    await this.saveSession(session);
+    return session.pinned;
   }
 
   /**

@@ -284,8 +284,24 @@ export class Sidebar {
     }
 
     this.sessionListContainer.innerHTML = '';
-    const groups = this.groupSessions(sessions);
     const activeSession = store.getActiveSession();
+
+    // Render Pinned Sessions Group
+    const pinnedSessions = sessions.filter((s) => Boolean(s.pinned));
+    const unpinnedSessions = sessions.filter((s) => !s.pinned);
+
+    if (pinnedSessions.length > 0) {
+      const pinLabel = document.createElement('div');
+      pinLabel.className = 'grp section-label pinned-label';
+      pinLabel.innerHTML = '<svg class="i" style="width:12px;height:12px;margin-inline-end:5px"><use href="#pin"/></svg>Pinned';
+      this.sessionListContainer.appendChild(pinLabel);
+
+      for (const session of pinnedSessions) {
+        this._renderSessionItem(session, activeSession);
+      }
+    }
+
+    const groups = this.groupSessions(unpinnedSessions);
 
     for (const [groupName, groupItems] of Object.entries(groups)) {
       if (groupItems.length === 0) continue;
@@ -296,27 +312,48 @@ export class Sidebar {
       this.sessionListContainer.appendChild(label);
 
       for (const session of groupItems) {
-        const item = document.createElement('button');
-        item.className = 'sess session-item';
-        item.dataset.sessionId = session.id;
-        const isActive = activeSession && activeSession.id === session.id;
-        item.setAttribute('aria-current', String(isActive));
-        if (isActive) item.classList.add('active');
-
-        const titleSpan = document.createElement('span');
-        titleSpan.textContent = session.title || 'New conversation';
-        titleSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:start;';
-        item.appendChild(titleSpan);
-
-        item.addEventListener('click', () => {
-          store.setActiveSession(session.id);
-          if (window.innerWidth < 760) {
-            this.container.classList.remove('open');
-          }
-        });
-
-        this.sessionListContainer.appendChild(item);
+        this._renderSessionItem(session, activeSession);
       }
     }
+  }
+
+  _renderSessionItem(session, activeSession) {
+    const item = document.createElement('button');
+    item.className = 'sess session-item';
+    if (session.pinned) item.classList.add('is-pinned');
+    item.dataset.sessionId = session.id;
+    const isActive = activeSession && activeSession.id === session.id;
+    item.setAttribute('aria-current', String(isActive));
+    if (isActive) item.classList.add('active');
+
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = session.title || 'New conversation';
+    titleSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:start;';
+    item.appendChild(titleSpan);
+
+    const pinBtn = document.createElement('span');
+    pinBtn.className = 'btn-pin-session';
+    pinBtn.title = session.pinned ? 'Unpin chat' : 'Pin chat';
+    pinBtn.setAttribute('role', 'button');
+    pinBtn.setAttribute('tabindex', '0');
+    pinBtn.innerHTML = '<svg class="i"><use href="#pin"/></svg>';
+    pinBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      session.pinned = !session.pinned;
+      if (store.storage) {
+        await store.storage.saveSession(session);
+      }
+      this.render();
+    });
+    item.appendChild(pinBtn);
+
+    item.addEventListener('click', () => {
+      store.setActiveSession(session.id);
+      if (window.innerWidth < 760) {
+        this.container.classList.remove('open');
+      }
+    });
+
+    this.sessionListContainer.appendChild(item);
   }
 }

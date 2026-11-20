@@ -25,6 +25,11 @@
   --g1: rgba(255, 150, 180, 0.30);
   --g2: rgba(110, 215, 165, 0.28);
   --sh: 0 10px 34px rgba(255, 130, 110, 0.16);
+  --glow: rgba(95, 199, 155, 0.16);
+  --blur-glass: 16px;
+
+  --accent: var(--sage);
+  --accent-dark: var(--sd);
 
   --f: Inter, system-ui, "Vazirmatn", sans-serif;
   --s: "Source Serif 4", Georgia, serif;
@@ -88,6 +93,72 @@
   --g1: rgba(255, 157, 181, 0.12);
   --g2: rgba(127, 216, 176, 0.14);
   --sh: 0 10px 34px rgba(0, 0, 0, 0.45);
+  --glow: rgba(127, 216, 176, 0.22);
+}
+
+/* --------------------------------------------------------------------------
+   Curated Pastel Theme Palettes (Matcha, Lavender, Peach, Ocean)
+   -------------------------------------------------------------------------- */
+
+/* 1. Matcha & Sand (Default Palette) */
+[data-palette="matcha"][data-theme="light"],
+[data-palette="matcha"]:not([data-theme="dark"]) {
+  --bg: #fff9ef; --panel: #fffefb; --side: #fdeedb; --line: #f1dfc5;
+  --tx: #2c3a33; --mu: #5d6a5c; --sage: #5fc79b; --sd: #1b7552;
+  --tint: #d6f3e4; --peach: #ffe2cc; --rose: #ff7f9c; --btn: #25996d;
+  --glow: rgba(95, 199, 155, 0.16);
+}
+[data-palette="matcha"][data-theme="dark"] {
+  --bg: #1a2420; --panel: #243029; --side: #141c18; --line: #37493f;
+  --tx: #eef6ef; --mu: #aabdb1; --sage: #7fd8b0; --sd: #9ceac6;
+  --tint: #2b4a3c; --peach: #4b3b33; --rose: #ff9db5; --btn: #8fe4be;
+  --glow: rgba(127, 216, 176, 0.22);
+}
+
+/* 2. Lavender Breeze */
+[data-palette="lavender"][data-theme="light"],
+[data-palette="lavender"]:not([data-theme="dark"]) {
+  --bg: #f9f8fe; --panel: #ffffff; --side: #f2effc; --line: #e4ddfa;
+  --tx: #2e2842; --mu: #655d7e; --sage: #8c7ae6; --sd: #574b90;
+  --tint: #ece8fc; --peach: #fedfe8; --rose: #f368e0; --btn: #8c7ae6;
+  --glow: rgba(140, 122, 230, 0.16);
+}
+[data-palette="lavender"][data-theme="dark"] {
+  --bg: #1a1924; --panel: #242233; --side: #15141f; --line: #322f47;
+  --tx: #f0eef8; --mu: #9e96b8; --sage: #a29bfe; --sd: #c8c4ff;
+  --tint: #2d2945; --peach: #3b2735; --rose: #f368e0; --btn: #a29bfe;
+  --glow: rgba(162, 155, 254, 0.22);
+}
+
+/* 3. Peach Sorbet */
+[data-palette="peach"][data-theme="light"],
+[data-palette="peach"]:not([data-theme="dark"]) {
+  --bg: #fff8f4; --panel: #ffffff; --side: #fef0e7; --line: #fcdbc8;
+  --tx: #3c2923; --mu: #7c5f55; --sage: #f7826a; --sd: #c04e37;
+  --tint: #ffeae2; --peach: #fed8c7; --rose: #ff5252; --btn: #f7826a;
+  --glow: rgba(247, 130, 106, 0.16);
+}
+[data-palette="peach"][data-theme="dark"] {
+  --bg: #241b18; --panel: #302522; --side: #1c1513; --line: #42322e;
+  --tx: #f8eee9; --mu: #b39a91; --sage: #fa9d8b; --sd: #fec0b3;
+  --tint: #402720; --peach: #3b2823; --rose: #ff6b6b; --btn: #fa9d8b;
+  --glow: rgba(250, 157, 139, 0.22);
+}
+
+/* 4. Ocean Mist */
+[data-palette="ocean"][data-theme="light"],
+[data-palette="ocean"]:not([data-theme="dark"]) {
+  --bg: #f2faf9; --panel: #ffffff; --side: #e6f6f4; --line: #d0eeeb;
+  --tx: #1e3332; --mu: #507170; --sage: #38ada9; --sd: #079992;
+  --tint: #e0f5f3; --peach: #fedac9; --rose: #e55039; --btn: #38ada9;
+  --glow: rgba(56, 173, 169, 0.16);
+}
+[data-palette="ocean"][data-theme="dark"] {
+  --bg: #152026; --panel: #1d2c34; --side: #111a1f; --line: #283c47;
+  --tx: #e7f2f4; --mu: #89a8af; --sage: #4dd0e1; --sd: #80deea;
+  --tint: #1b3842; --peach: #3a2a22; --rose: #ff7675; --btn: #4dd0e1;
+  --glow: rgba(77, 208, 225, 0.22);
+}
 
   --card: var(--panel);
   --ink: var(--tx);
@@ -676,6 +747,14 @@ header, .top-header {
   padding: 0 18px;
   gap: 10px;
   flex: none;
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(var(--blur-glass, 16px));
+  -webkit-backdrop-filter: blur(var(--blur-glass, 16px));
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .title {
@@ -969,17 +1048,21 @@ header, .top-header {
   width: min(720px, 100%);
   margin: 0 auto;
   background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  backdrop-filter: blur(var(--blur-glass, 16px));
+  -webkit-backdrop-filter: blur(var(--blur-glass, 16px));
   border: 1px solid var(--line);
   border-radius: 26px;
-  box-shadow: var(--sh);
+  box-shadow: 0 8px 30px var(--glow), var(--sh);
   padding: 12px 12px 10px 16px;
   position: relative;
-  transition: border-color .2s;
+  transition: border-color .2s, box-shadow .2s;
   pointer-events: auto;
 }
 
 .cap:focus-within, .composer-box:focus-within {
   border-color: var(--sage);
+  box-shadow: 0 0 0 3px var(--tint), 0 10px 36px var(--glow);
 }
 
 .chips {
@@ -1550,3 +1633,340 @@ details.sc summary {
 .btn-dialog-confirm:hover {
   opacity: 0.9;
 }
+
+/* ==========================================================================
+   Modern Pastel Design System Enhancements (Specs 024)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Pastel Palette Selection Grid
+   -------------------------------------------------------------------------- */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.palette-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  background: var(--bg);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-m, 14px);
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--tx);
+  position: relative;
+  outline: none;
+}
+
+.palette-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--sage);
+  box-shadow: 0 4px 16px var(--glow);
+}
+
+.palette-card.active, .palette-card[aria-checked="true"] {
+  border-color: var(--sage);
+  background: var(--tint);
+  box-shadow: 0 0 0 2px var(--sage), 0 6px 18px var(--glow);
+  font-weight: 600;
+}
+
+.palette-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  display: block;
+}
+
+.palette-title {
+  font-size: 13px;
+  font-family: var(--f);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Empty Canvas Pastel Starter Cards
+   -------------------------------------------------------------------------- */
+.starters-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 680px;
+  margin-top: 24px;
+}
+
+@media (max-width: 600px) {
+  .starters-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.starter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: start;
+  padding: 16px 18px;
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m, 14px);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  position: relative;
+}
+
+.starter-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--sage);
+  box-shadow: 0 8px 24px var(--glow);
+  background: var(--panel);
+}
+
+.starter-top {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.starter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.starter-badge .i {
+  width: 13px;
+  height: 13px;
+}
+
+.badge-matcha {
+  background: #d6f3e4;
+  color: #1b7552;
+}
+
+.badge-ocean {
+  background: #e0f5f3;
+  color: #079992;
+}
+
+.badge-lavender {
+  background: #ece8fc;
+  color: #574b90;
+}
+
+.badge-peach {
+  background: #ffeae2;
+  color: #c04e37;
+}
+
+[data-theme="dark"] .badge-matcha {
+  background: #2b4a3c;
+  color: #8fe4be;
+}
+
+[data-theme="dark"] .badge-ocean {
+  background: #1b3842;
+  color: #80deea;
+}
+
+[data-theme="dark"] .badge-lavender {
+  background: #2d2945;
+  color: #c8c4ff;
+}
+
+[data-theme="dark"] .badge-peach {
+  background: #402720;
+  color: #fec0b3;
+}
+
+.starter-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--tx);
+  margin-bottom: 4px;
+}
+
+.starter-desc {
+  font-size: 12.5px;
+  color: var(--mu);
+  line-height: 1.4;
+}
+
+/* --------------------------------------------------------------------------
+   Message Action Hover Dock
+   -------------------------------------------------------------------------- */
+.msg-dock {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  opacity: 0.72;
+  transition: opacity 0.18s ease;
+}
+
+.message-row:hover .msg-dock {
+  opacity: 1;
+}
+
+.user-msg-dock {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--mu);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-icon:hover {
+  background: var(--tint);
+  color: var(--tx);
+  border-color: var(--line);
+  transform: translateY(-1px);
+}
+
+.btn-icon:active {
+  transform: scale(0.94);
+}
+
+.btn-icon .i {
+  width: 15px;
+  height: 15px;
+}
+
+/* --------------------------------------------------------------------------
+   Collapsible Thinking Process Box with Shimmer
+   -------------------------------------------------------------------------- */
+.thought-box {
+  margin-bottom: 8px;
+  border-radius: var(--radius-m, 14px);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.thought-box.is-streaming {
+  border-color: var(--sage);
+  box-shadow: 0 0 16px var(--glow);
+  position: relative;
+}
+
+.thought-box.is-streaming::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--sage), transparent);
+  animation: thoughtShimmer 2s infinite linear;
+}
+
+@keyframes thoughtShimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rose);
+  display: inline-block;
+  animation: pulseDotAnim 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseDotAnim {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.5); opacity: 1; }
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar Pinned Conversations
+   -------------------------------------------------------------------------- */
+.pinned-label {
+  display: flex;
+  align-items: center;
+  color: var(--sd);
+  font-weight: 600;
+}
+
+.btn-pin-session {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--mu);
+  cursor: pointer;
+  margin-inline-start: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-pin-session .i {
+  width: 13px;
+  height: 13px;
+}
+
+.btn-pin-session:hover {
+  color: var(--rose);
+  background: var(--tint);
+}
+
+.session-item:hover .btn-pin-session,
+.session-item.is-pinned .btn-pin-session {
+  display: inline-flex;
+}
+
+.session-item.is-pinned {
+  border-inline-start: 2px solid var(--rose);
+}
+
+.session-item.is-pinned .btn-pin-session {
+  color: var(--rose);
+}
+
+.font-fa, [dir="rtl"] {
+  font-family: var(--font-fa) !important;
+  letter-spacing: -0.01em;
+  line-height: 1.8;
+}
+
+/* --------------------------------------------------------------------------
+   Accessibility & Reduced Motion
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+}
+

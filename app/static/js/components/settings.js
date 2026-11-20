@@ -101,6 +101,17 @@ export class SettingsDialog {
         if (this.fontScaleVal) this.fontScaleVal.textContent = `${val}%`;
       });
     }
+
+    // Pastel Palette Selector
+    const paletteButtons = this.backdrop.querySelectorAll('button[data-palette-val]');
+    paletteButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const val = btn.dataset.paletteVal;
+        if (val) {
+          themeManager.setPalette(val);
+        }
+      });
+    });
   }
 
   setupModelSettings() {
@@ -208,6 +219,15 @@ export class SettingsDialog {
       : (paneId === 'data' || paneId === 'about' ? 'p3' : paneId));
 
     this.switchPane(normalizedPane);
+
+    // Sync palette selector state
+    const activePalette = themeManager.currentPalette || 'matcha';
+    const paletteButtons = this.backdrop.querySelectorAll('button[data-palette-val]');
+    paletteButtons.forEach((btn) => {
+      const isSelected = btn.dataset.paletteVal === activePalette;
+      btn.setAttribute('aria-checked', String(isSelected));
+      btn.classList.toggle('active', isSelected);
+    });
 
     // Focus close button
     if (this.closeBtn) {
