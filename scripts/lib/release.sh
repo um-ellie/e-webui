@@ -19,6 +19,8 @@ extract_release_in_container() {
     local container_staged_item="$4"
 
     local release_dir="${app_dir}/releases/${release_id}"
+    # Purge any pre-existing release directory to ensure 100% clean, non-polluted extraction
+    run_in_container "${c_name}" rm -rf "${release_dir}"
     run_in_container "${c_name}" mkdir -p "${release_dir}"
 
     info "Extracting release into ${release_dir}..."
@@ -42,6 +44,9 @@ extract_release_in_container() {
         fi
         run_in_container "${c_name}" rm -f "${container_staged_item}"
     fi
+
+    # Clean any stale bytecode files that might conflict between Python versions
+    run_in_container_bash "${c_name}" "find '${release_dir}' -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true"
 
     return 0
 }

@@ -77,6 +77,9 @@ async def add_security_headers(request, call_next):
         "media-src 'self' blob:; "
         "connect-src 'self';"
     )
+    # Ensure UI templates and static assets revalidate immediately upon container updates
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 # Mount static directory
@@ -93,7 +96,10 @@ async def serve_index():
             status_code=status.HTTP_404_NOT_FOUND,
             detail="UI template not found",
         )
-    return FileResponse(index_file)
+    return FileResponse(
+        index_file,
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 @app.get("/api/health", response_model=HealthResponse)

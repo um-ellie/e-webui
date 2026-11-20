@@ -674,6 +674,8 @@ main() {
                 error "Container '${CONTAINER_NAME}' is not running."
                 exit 2
             fi
+            info "Cleaning stale bytecode in container..."
+            run_in_container_bash "${CONTAINER_NAME}" "find '${APP_DIR}/current/app' -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true"
             info "Syncing 'app/' directly into container..."
             container_push_dir_contents "${REPO_ROOT}/app" "${CONTAINER_NAME}${APP_DIR}/current/app/"
             info "Restarting service 'e-webui'..."

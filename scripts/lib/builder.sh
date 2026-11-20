@@ -50,9 +50,9 @@ workspace_has_changes() {
         return 0
     fi
 
-    # Check git uncommitted changes in app/ or requirements.txt
+    # Check git uncommitted changes in app/ or requirements.txt (including untracked files)
     if git rev-parse --git-dir >/dev/null 2>&1; then
-        if [ -n "$(git status --porcelain -- "${src_dir}/app" "${src_dir}/requirements.txt" 2>/dev/null)" ]; then
+        if [ -n "$(git status --porcelain -uall -- "${src_dir}/app" "${src_dir}/requirements.txt" 2>/dev/null)" ]; then
             return 0
         fi
     fi
