@@ -116,6 +116,12 @@ class TTSService:
         self.error_reason = None
         logger.info(f"TTS service ready. Resolved model weights at: {self.weights_path}")
 
+    def recheck_environment(self) -> bool:
+        """Re-runs environment checks (useful after profile or model updates)."""
+        self.error_reason = None
+        self._check_environment()
+        return self.available
+
     def _load_model(self):
         """Loads Kokoro pipeline into memory synchronously."""
         if self.pipeline is not None:

@@ -38,7 +38,35 @@ PURGE_DATA=0
 OPERATION="auto"
 RELEASE_PATH=""
 SKIP_MODEL_DOWNLOAD=0
-DEPLOY_PROFILE="core"
+CLI_DEPLOY_PROFILE=""
+DEPLOY_PROFILE=""
+
+resolve_deployment_profile() {
+    local c_name="$1"
+    local app_dir="${2:-/opt/e-webui}"
+
+    if [ -n "${CLI_DEPLOY_PROFILE:-}" ]; then
+        echo "${CLI_DEPLOY_PROFILE}"
+        return 0
+    fi
+
+    if [ "$(type -t kokoro_model_is_present || true)" = "function" ] && \
+       kokoro_model_is_present "${c_name}" "${app_dir}"; then
+        echo "tts"
+        return 0
+    fi
+
+    if [ "$(type -t state_get_profile || true)" = "function" ]; then
+        local prev_prof
+        prev_prof=$(state_get_profile "${c_name}" "${app_dir}")
+        if [ -n "${prev_prof}" ] && [ "${prev_prof}" != "core" ]; then
+            echo "${prev_prof}"
+            return 0
+        fi
+    fi
+
+    echo "core"
+}
 
 show_help() {
     cat <<EOF
@@ -122,6 +150,7 @@ while [ $# -gt 0 ]; do
             ;;
         --profile)
             if [ -n "${2:-}" ]; then
+                CLI_DEPLOY_PROFILE="$2"
                 DEPLOY_PROFILE="$2"
                 shift 2
             else
@@ -130,6 +159,7 @@ while [ $# -gt 0 ]; do
             fi
             ;;
         --with-tts)
+            CLI_DEPLOY_PROFILE="tts"
             DEPLOY_PROFILE="tts"
             shift
             ;;
@@ -335,6 +365,10 @@ run_update() {
     local git_commit
     git_commit=$(get_manifest_field "${release_dir}/manifest.json" "git.commit")
 
+    # Resolve deployment profile (auto-detect TTS if model weights exist)
+    DEPLOY_PROFILE="$(resolve_deployment_profile "${CONTAINER_NAME}" "${APP_DIR}")"
+    info "Deployment profile resolved to: ${DEPLOY_PROFILE}"
+
     info "Deploying release: ${release_id} (v${app_version}, git: ${git_commit:-none})"
 
     local req_hash
@@ -375,13 +409,13 @@ run_update() {
 
     # Ensure virtual environment
     local req_container="${APP_DIR}/releases/${release_id}/requirements.txt"
-    ensure_venv_in_container "${CONTAINER_NAME}" "${APP_DIR}" "${req_container}" "${req_hash}"
+    ensure_venv_in_container "${CONTAINER_NAME}" "${APP_DIR}" "${req_container}" "${req_hash}" "${DEPLOY_PROFILE}"
 
     # Link dependencies and data
-    link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}"
+    link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${DEPLOY_PROFILE}"
 
     # Ensure Kokoro TTS Model Weights (non-blocking if TTS profile)
-    if [ "${DEPLOY_PROFILE:-core}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
+    if [ "${DEPLOY_PROFILE}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
         ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
     else
         info "Core profile active: skipping Kokoro TTS model acquisition."
@@ -464,6 +498,10 @@ run_install() {
     local git_commit
     git_commit=$(get_manifest_field "${release_dir}/manifest.json" "git.commit")
 
+    # Resolve deployment profile (auto-detect TTS if model weights exist)
+    DEPLOY_PROFILE="$(resolve_deployment_profile "${CONTAINER_NAME}" "${APP_DIR}")"
+    info "Deployment profile resolved to: ${DEPLOY_PROFILE}"
+
     info "Preparing initial release: ${release_id} (v${app_version})"
 
     local req_hash
@@ -482,13 +520,13 @@ run_install() {
 
     # Step 6: Create Virtual Environment and Install Dependencies
     local req_container="${APP_DIR}/releases/${release_id}/requirements.txt"
-    ensure_venv_in_container "${CONTAINER_NAME}" "${APP_DIR}" "${req_container}" "${req_hash}"
+    ensure_venv_in_container "${CONTAINER_NAME}" "${APP_DIR}" "${req_container}" "${req_hash}" "${DEPLOY_PROFILE}"
 
     # Step 7: Link Dependencies & Data
-    link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}"
+    link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${DEPLOY_PROFILE}"
 
     # Step 7b: Ensure Kokoro TTS Model Weights (non-blocking if TTS profile)
-    if [ "${DEPLOY_PROFILE:-core}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
+    if [ "${DEPLOY_PROFILE}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
         ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
     else
         info "Core profile active: skipping Kokoro TTS model acquisition."

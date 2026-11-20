@@ -19,6 +19,27 @@ sys.exit(1)
 resolve_compatible_python() {
     local c_name="$1"
     local app_dir="${2:-/opt/e-webui}"
+    local profile="${3:-${DEPLOY_PROFILE:-core}}"
+
+    # When TTS profile is requested, PyTorch/Kokoro require Python <=3.11/3.12 (Debian 13 python3 is 3.13)
+    if [ "${profile}" = "tts" ]; then
+        # 1. Check isolated standalone python-3.11 directory
+        local standalone_bin="${app_dir}/interpreters/python-3.11/bin/python3"
+        if container_test_file "${c_name}" "${standalone_bin}" && \
+           is_compatible_python_binary "${c_name}" "${standalone_bin}"; then
+            echo "${standalone_bin}"
+            return 0
+        fi
+
+        # 2. Check alternative system binaries (python3.11, python3.12)
+        for alt_bin in "/usr/bin/python3.11" "/usr/local/bin/python3.11" "/usr/bin/python3.12" "/usr/local/bin/python3.12"; do
+            if container_test_file "${c_name}" "${alt_bin}" && \
+               is_compatible_python_binary "${c_name}" "${alt_bin}"; then
+                echo "${alt_bin}"
+                return 0
+            fi
+        done
+    fi
 
     # 1. Prefer default system python3 if it satisfies 3.10-3.13 (avoids external downloads)
     if is_compatible_python_binary "${c_name}" "python3"; then
@@ -49,9 +70,10 @@ resolve_compatible_python() {
 ensure_compatible_python() {
     local c_name="$1"
     local app_dir="${2:-/opt/e-webui}"
+    local profile="${3:-${DEPLOY_PROFILE:-core}}"
 
     local existing_bin
-    if existing_bin=$(resolve_compatible_python "${c_name}" "${app_dir}"); then
+    if existing_bin=$(resolve_compatible_python "${c_name}" "${app_dir}" "${profile}"); then
         success "Compatible Python interpreter found: ${existing_bin}" >&2
         echo "${existing_bin}"
         return 0
@@ -132,15 +154,28 @@ calculate_requirements_hash() {
 venv_dir_for_hash() {
     local app_dir="${1:-/opt/e-webui}"
     local hash_val="$2"
-    echo "${app_dir}/venvs/env-${hash_val}"
+    local profile="${3:-${DEPLOY_PROFILE:-core}}"
+    if [ "${profile}" = "tts" ]; then
+        echo "${app_dir}/venvs/py3.11-${hash_val}"
+    else
+        echo "${app_dir}/venvs/env-${hash_val}"
+    fi
 }
 
 venv_exists_in_container() {
     local c_name="$1"
     local app_dir="$2"
     local hash_val="$3"
+    local profile="${4:-${DEPLOY_PROFILE:-core}}"
     local venv_dir
-    venv_dir="$(venv_dir_for_hash "${app_dir}" "${hash_val}")"
+    venv_dir="$(venv_dir_for_hash "${app_dir}" "${hash_val}" "${profile}")"
+    if ! container_test_dir "${c_name}" "${venv_dir}"; then
+        if [ "${profile}" = "tts" ] && container_test_dir "${c_name}" "${app_dir}/venvs/env-${hash_val}"; then
+            if run_in_container "${c_name}" "${app_dir}/venvs/env-${hash_val}/bin/python3" -c "import soundfile, kokoro, torch" 2>/dev/null; then
+                venv_dir="${app_dir}/venvs/env-${hash_val}"
+            fi
+        fi
+    fi
     container_test_file "${c_name}" "${venv_dir}/bin/python3" && \
     container_test_file "${c_name}" "${venv_dir}/bin/uvicorn" && \
     is_compatible_python_binary "${c_name}" "${venv_dir}/bin/python3"
@@ -151,16 +186,17 @@ ensure_venv_in_container() {
     local app_dir="$2"
     local req_container_path="$3"
     local hash_val="$4"
+    local profile="${5:-${DEPLOY_PROFILE:-core}}"
     local venv_dir
-    venv_dir="$(venv_dir_for_hash "${app_dir}" "${hash_val}")"
+    venv_dir="$(venv_dir_for_hash "${app_dir}" "${hash_val}" "${profile}")"
 
-    if venv_exists_in_container "${c_name}" "${app_dir}" "${hash_val}"; then
+    if venv_exists_in_container "${c_name}" "${app_dir}" "${hash_val}" "${profile}"; then
         success "Dependency Cache Hit: Reusing existing compatible Python environment (${hash_val:0:12})."
         return 0
     fi
 
     local py_bin
-    py_bin=$(ensure_compatible_python "${c_name}" "${app_dir}")
+    py_bin=$(ensure_compatible_python "${c_name}" "${app_dir}" "${profile}")
 
     info "Dependency Cache Miss: Provisioning new Python virtual environment at ${venv_dir} using ${py_bin}..."
     run_in_container "${c_name}" mkdir -p "${app_dir}/venvs"

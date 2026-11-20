@@ -477,11 +477,14 @@ Message: ${escapeHtml(msg.error || msg.content || 'Unknown error')}</code></pre>
           btnTTS.setAttribute('aria-pressed', 'false');
           if (errorHint) {
             btnTTS.classList.add('error-hint');
-            btnTTS.title = errorHint;
+            const displayError = (errorHint.includes('soundfile') || errorHint.includes('not installed'))
+              ? 'Speech synthesis not enabled in current profile. Activate TTS profile in ./ctl'
+              : errorHint;
+            btnTTS.title = displayError;
             setTimeout(() => {
               btnTTS.classList.remove('error-hint');
               btnTTS.title = 'Read aloud';
-            }, 3000);
+            }, 4000);
           } else {
             btnTTS.title = 'Read aloud';
           }

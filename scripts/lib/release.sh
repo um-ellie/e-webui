@@ -51,13 +51,20 @@ link_release_environment() {
     local app_dir="$2"
     local release_id="$3"
     local venv_hash="$4"
+    local profile="${5:-${DEPLOY_PROFILE:-core}}"
 
     local release_dir="${app_dir}/releases/${release_id}"
     local target_venv
     if [ "$(type -t venv_dir_for_hash || true)" = "function" ]; then
-        target_venv="$(venv_dir_for_hash "${app_dir}" "${venv_hash}")"
-        if ! container_test_dir "${c_name}" "${target_venv}" && container_test_dir "${c_name}" "${app_dir}/venvs/${venv_hash}"; then
-            target_venv="${app_dir}/venvs/${venv_hash}"
+        target_venv="$(venv_dir_for_hash "${app_dir}" "${venv_hash}" "${profile}")"
+        if ! container_test_dir "${c_name}" "${target_venv}"; then
+            if [ "${profile}" = "tts" ] && container_test_dir "${c_name}" "${app_dir}/venvs/py3.11-${venv_hash}"; then
+                target_venv="${app_dir}/venvs/py3.11-${venv_hash}"
+            elif container_test_dir "${c_name}" "${app_dir}/venvs/env-${venv_hash}"; then
+                target_venv="${app_dir}/venvs/env-${venv_hash}"
+            elif container_test_dir "${c_name}" "${app_dir}/venvs/${venv_hash}"; then
+                target_venv="${app_dir}/venvs/${venv_hash}"
+            fi
         fi
     else
         target_venv="${app_dir}/venvs/${venv_hash}"

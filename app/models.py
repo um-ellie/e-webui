@@ -122,6 +122,12 @@ class HealthResponse(BaseModel):
     loaded_models: List[str] = Field(
         default_factory=list, description="Currently loaded models resident in memory"
     )
+    tts_available: bool = Field(
+        default=False, description="Whether TTS speech synthesis is available"
+    )
+    tts_error: Optional[str] = Field(
+        default=None, description="Reason if TTS speech synthesis is unavailable"
+    )
 
 
 class TTSRequest(BaseModel):

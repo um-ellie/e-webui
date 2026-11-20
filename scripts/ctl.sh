@@ -173,15 +173,37 @@ action_manage_profiles() {
         read -r p_choice || true
         case "${p_choice}" in
             1)
-                info "Setting active profile to Core..."
-                run_in_container_bash "${CONTAINER_NAME}" "sed -i 's/\"profile\": .*/\"profile\": \"core\",/' '${APP_DIR}/.deploy_state' 2>/dev/null || true"
-                success "Core profile selected. Core uses <50MB RAM."
+                info "Switching active profile to Core..."
+                local req_hash
+                req_hash=$(state_read_field "${CONTAINER_NAME}" "active_venv_hash" "${APP_DIR}")
+                local core_venv="${APP_DIR}/venvs/env-${req_hash}"
+                if container_test_file "${CONTAINER_NAME}" "${core_venv}/bin/uvicorn"; then
+                    run_in_container_bash "${CONTAINER_NAME}" "ln -sfn '${core_venv}' '${APP_DIR}/current/venv' && sed -i 's/\"profile\": .*/\"profile\": \"core\",/' '${APP_DIR}/.deploy_state'"
+                    info "Restarting service 'e-webui'..."
+                    restart_service "${CONTAINER_NAME}"
+                    success "Core profile activated. Core uses <50MB RAM."
+                else
+                    info "Core virtual environment not yet provisioned. Deploying Core profile..."
+                    "${DEPLOY_SCRIPT}" --update --profile core "${CONTAINER_NAME}" || true
+                fi
                 tui_pause
                 break
                 ;;
             2)
-                info "Acquiring Kokoro TTS model assets..."
+                info "Switching active profile to TTS..."
                 "${DEPLOY_SCRIPT}" --download-model "${CONTAINER_NAME}" || true
+                local req_hash
+                req_hash=$(state_read_field "${CONTAINER_NAME}" "active_venv_hash" "${APP_DIR}")
+                local tts_venv="${APP_DIR}/venvs/py3.11-${req_hash}"
+                if container_test_file "${CONTAINER_NAME}" "${tts_venv}/bin/uvicorn"; then
+                    run_in_container_bash "${CONTAINER_NAME}" "ln -sfn '${tts_venv}' '${APP_DIR}/current/venv' && sed -i 's/\"profile\": .*/\"profile\": \"tts\",/' '${APP_DIR}/.deploy_state'"
+                    info "Restarting service 'e-webui'..."
+                    restart_service "${CONTAINER_NAME}"
+                    success "TTS profile activated. American voice speech synthesis enabled."
+                else
+                    info "TTS virtual environment not yet provisioned. Deploying TTS profile..."
+                    "${DEPLOY_SCRIPT}" --update --profile tts "${CONTAINER_NAME}" || true
+                fi
                 tui_pause
                 break
                 ;;

@@ -112,7 +112,20 @@ async def health_check():
         ollama_url=OLLAMA_HOST,
         latency_ms=latency_ms,
         loaded_models=loaded_models,
+        tts_available=tts_service.available,
+        tts_error=tts_service.error_reason if not tts_service.available else None,
     )
+
+
+@app.get("/api/tts/status")
+async def tts_status():
+    """Returns status of text-to-speech service and model assets."""
+    return {
+        "available": tts_service.available,
+        "error": tts_service.error_reason,
+        "model_dir": str(tts_service.model_dir),
+        "weights_present": tts_service.weights_path is not None,
+    }
 
 
 @app.get("/api/models", response_model=ModelListResponse)
@@ -176,6 +189,9 @@ async def generate_response(request: PromptRequest):
 @app.post("/api/tts/synthesize")
 async def synthesize_speech(request: TTSRequest):
     """Synthesizes text into 24kHz WAV audio via Kokoro on CPU."""
+    if not tts_service.available:
+        tts_service.recheck_environment()
+
     if not tts_service.available:
         logger.warning(f"TTS synthesis requested but service unavailable: {tts_service.error_reason}")
         raise HTTPException(
