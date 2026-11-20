@@ -38,14 +38,17 @@ class MockIncusState:
         c_root.mkdir(parents=True, exist_ok=True)
         c_info_file = self.base_dir / f"container_{name}.json"
         c_info_file.write_text(json.dumps({"status": status}))
+        c_dev_file = self.base_dir / f"devices_{name}.json"
+        default_devices = devices or {
+            "webui-proxy": {"type": "proxy", "listen": "tcp:127.0.0.1:8080", "connect": "tcp:127.0.0.1:8080"},
+            "ollama-link": {"type": "proxy", "listen": "tcp:127.0.0.1:11434", "connect": "tcp:127.0.0.1:11434"},
+        }
+        c_dev_file.write_text(json.dumps(default_devices))
         self.containers[name] = {
             "name": name,
             "status": status,
             "root": c_root,
-            "devices": devices or {
-                "webui-proxy": {"type": "proxy", "listen": "tcp:127.0.0.1:8080", "connect": "tcp:127.0.0.1:8080"},
-                "ollama-link": {"type": "proxy", "listen": "tcp:127.0.0.1:11434", "connect": "tcp:127.0.0.1:11434"},
-            },
+            "devices": default_devices,
         }
 
     def remove_container(self, name: str):
@@ -184,6 +187,14 @@ def handle_cli():
         if "pip" in full_cmd and "install" in full_cmd:
             sys.exit(0)
 
+        if "journalctl" in full_cmd:
+            print("Nov 20 03:00:00 webui systemd[1]: Started e-webui.service - e-webui Application Service.")
+            print("Nov 20 03:00:01 webui uvicorn[123]: INFO: Started server process [123]")
+            print("Nov 20 03:00:01 webui uvicorn[123]: INFO: Waiting for application startup.")
+            print("Nov 20 03:00:01 webui uvicorn[123]: INFO: Application startup complete.")
+            print("Nov 20 03:00:01 webui uvicorn[123]: INFO: Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)")
+            sys.exit(0)
+
         if "systemctl" in full_cmd:
             if "is-active" in full_cmd:
                 active_flag = state_dir / f"{name}_service_active"
@@ -285,6 +296,43 @@ def handle_cli():
 
     # incus config device ...
     if cmd == "config" and len(args) > 1 and args[1] == "device":
+        sub = args[2] if len(args) > 2 else ""
+        c_name = args[3] if len(args) > 3 else ""
+        dev_file = state_dir / f"devices_{c_name}.json"
+        devs = {}
+        if dev_file.exists():
+            try:
+                devs = json.loads(dev_file.read_text())
+            except Exception:
+                devs = {}
+
+        if sub == "show":
+            for dname, props in devs.items():
+                print(f"{dname}:")
+                for k, v in props.items():
+                    print(f"  {k}: {v}")
+            sys.exit(0)
+
+        if sub == "add":
+            # format: incus config device add <container> <dev_name> <type> [key=val...]
+            dev_name = args[4] if len(args) > 4 else ""
+            dev_type = args[5] if len(args) > 5 else "proxy"
+            props = {"type": dev_type}
+            for param in args[6:]:
+                if "=" in param:
+                    k, v = param.split("=", 1)
+                    props[k] = v
+            devs[dev_name] = props
+            dev_file.write_text(json.dumps(devs))
+            sys.exit(0)
+
+        if sub == "remove":
+            dev_name = args[4] if len(args) > 4 else ""
+            if dev_name in devs:
+                del devs[dev_name]
+                dev_file.write_text(json.dumps(devs))
+            sys.exit(0)
+
         sys.exit(0)
 
     sys.exit(0)

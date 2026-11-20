@@ -73,18 +73,20 @@ Ensure your Linux system has:
    incus exec ollama -- ollama list
    ```
 
-#### Step 2: Deploy the Application
-Run the deployment script from the project root:
+#### Step 2: Deploy and Control the Application
+Launch the interactive Control Center from the project root:
 ```bash
+./ctl
+# or
 ./deploy.sh
 ```
 
-The script guides you through setup interactively:
-- Automatically creates a Debian 13/stable container if one does not already exist.
-- Configures host proxy devices (`webui-proxy` on port 8080) and inter-container links (`ollama-link`).
-- Creates an isolated Python virtual environment (`/opt/e-webui/venv`) and installs dependencies.
-- Registers, activates, and verifies the `e-webui.service` systemd unit.
-- Conducts an HTTP health check to ensure immediate readiness.
+The interactive Control Center displays real-time container status, memory usage, service health, and guided actions:
+- **Interactive Dashboard**: View container state, Ollama link, active release, and HTTP status in one place.
+- **Smart Update**: Automatically detects local workspace code changes, packages them on-the-fly, and applies an atomic hot-switch.
+- **Fast Dev-Sync**: Instantly pushes changes to `app/` and reloads Uvicorn without packaging.
+- **Live Logs**: Stream real-time `journalctl` service logs with clean `Ctrl+C` exit back to menu.
+- **Modular Profiles**: Core profile uses **<50 MB RAM** by default without heavy PyTorch dependencies. Opt-in to Kokoro TTS whenever speech synthesis is needed.
 
 #### Step 3: Access and Use the Web Chat
 1. Open your browser on the host system and navigate to:
@@ -104,14 +106,20 @@ The script guides you through setup interactively:
    - **Clear Button**: Reset the active conversation history.
 
 #### Step 4: Common Management and Lifecycle Commands
-You can manage the application lifecycle directly using `./deploy.sh`:
+You can manage the application interactively via `./ctl` or directly via CLI flags:
 
 ```bash
-# Check current deployment status, active release ID, and HTTP health:
-./deploy.sh --status webui
+# Launch the Interactive Terminal Control Center:
+./ctl
 
-# Perform a quick update without rebuilding the container:
+# Perform a smart one-step update (auto-packages local source changes):
 ./deploy.sh --update webui
+
+# Rapid code synchronization directly into container (hot-reload without packaging):
+./deploy.sh --dev-sync webui
+
+# Check current deployment status and health:
+./deploy.sh --status webui
 
 # Restore the previous release version (Rollback):
 ./deploy.sh --rollback webui
@@ -119,11 +127,11 @@ You can manage the application lifecycle directly using `./deploy.sh`:
 # Automatically repair configuration, proxy links, or systemd services:
 ./deploy.sh --repair webui
 
+# Run unit tests locally on host machine without container:
+./scripts/test.sh --local
+
 # Package an immutable, verifiable release artifact:
 ./build-release.sh
-
-# Deploy using a specific release package:
-./deploy.sh --update --release dist/releases/e-webui-1.0.0-*.tar.gz webui
 
 # Clean uninstallation (preserves persistent data by default):
 ./deploy.sh --uninstall webui
@@ -288,18 +296,20 @@ To run the automated test suite within the Incus container:
    incus exec ollama -- ollama list
    ```
 
-#### گام ۲: اجرای اسکریپت استقرار
-در پوشه اصلی پروژه، اسکریپت استقرار را اجرا کنید:
+#### گام ۲: اجرای مرکز کنترل تعاملی یا استقرار
+در پوشه اصلی پروژه، مرکز کنترل تعاملی را اجرا کنید:
 ```bash
+./ctl
+# یا
 ./deploy.sh
 ```
 
-اسکریپت مراحل را به صورت خودکار و تعاملی پیش می‌برد:
-- در صورت عدم وجود کانتینر، به طور خودکار کانتینر Debian 13/stable را ایجاد می‌کند.
-- پروکسی میزبان (`webui-proxy` روی پورت ۸۰۸۰) و لینک ارتباطی با اولاما (`ollama-link`) را تنظیم می‌کند.
-- محیط مجازی ایزوله پایتون (`/opt/e-webui/venv`) ساخته و وابستگی‌ها را نصب می‌نماید.
-- سرویس سیستمی `e-webui.service` را ثبت، راه‌اندازی و فعال می‌کند.
-- با پروب سلامت HTTP بررسی می‌کند که وب‌رابط با موفقیت در حال پاسخ‌گویی است.
+مرکز کنترل تعاملی تمامی وضعیت‌ها را در یک داشبورد زنده نمایش می‌دهد و امکانات زیر را ارائه می‌نماید:
+- **داشبورد زنده (TUI)**: نمایش وضعیت کانتینر، مصرف رم، اتصال اولاما، نسخه ریلیز فعال و سلامت HTTP در یک نگاه.
+- **به‌روزرسانی هوشمند (Smart Update)**: تشخیص خودکار تغییرات کدهای محلی و اعمال خودکار آپدیت بدون نیاز به اجرای دستی `./build-release.sh`.
+- **سینک سریع توسعه (Fast Dev-Sync)**: انتقال آنی تغییرات پوشه `app/` و ری‌لود سرویس در کسری از ثانیه جهت تست سریع.
+- **مشاهده زنده لاگ‌ها**: استریم زنده لاگ‌های سرویس از طریق `journalctl` با امکان بازگشت آسان با کلید `Ctrl+C`.
+- **پروفایل‌های ماژولار**: پروفایل پیش‌فرض سبک (Core) با مصرف **زیر ۵۰ مگابایت رم** و نصب سریع؛ و امکان فعال‌سازی ماژول صوتی Kokoro TTS در صورت نیاز.
 
 #### گام ۳: باز کردن و استفاده از رابط کاربری در مرورگر
 ۱. در سیستم خود مرورگر را باز کرده و به نشانی زیر بروید:
@@ -319,14 +329,20 @@ To run the automated test suite within the Incus container:
    - **دکمه Clear**: پاک‌سازی پیام‌های گفت‌وگو و شروع مجدد.
 
 #### گام ۴: دستورات کاربردی مدیریت و چرخه عمر برنامه
-می‌توانید با استفاده از `./deploy.sh` استقرار را مدیریت کنید:
+می‌توانید برنامه را به صورت تعاملی با `./ctl` مدیریت کرده یا از دستورات مستقیم CLI استفاده نمایید:
 
 ```bash
-# مشاهده وضعیت کامل استقرار، شناسه پکیج فعال و سلامت HTTP:
-./deploy.sh --status webui
+# باز کردن مرکز کنترل و داشبورد تعاملی در ترمینال:
+./ctl
 
-# به‌روزرسانی سریع بدون بازسازی کانتینر و بسته‌های سیستمی:
+# به‌روزرسانی هوشمند تک‌مرحله‌ای (تشخیص و بسته‌بندی خودکار کدهای محلی):
 ./deploy.sh --update webui
+
+# سینک سریع تغییرات کدهای فرانت‌اند و پایتون بدون بسته‌بندی (تست فوری):
+./deploy.sh --dev-sync webui
+
+# مشاهده وضعیت کامل استقرار، نسخه فعال و سلامت سرویس:
+./deploy.sh --status webui
 
 # بازگشت خودکار به نسخه سالم قبلی (Rollback):
 ./deploy.sh --rollback webui
@@ -334,11 +350,11 @@ To run the automated test suite within the Incus container:
 # عیب‌یابی و اصلاح خودکار پروکسی‌ها، لینک‌ها و سرویس:
 ./deploy.sh --repair webui
 
+# اجرای آزمون‌های واحد به صورت محلی بر روی هاست (بدون نیاز به کانتینر):
+./scripts/test.sh --local
+
 # ساخت پکیج رسمی و تاییدشده انتشار (همراه با manifest و checksum):
 ./build-release.sh
-
-# استقرار یا ارتقا با فایل پکیج مشخص:
-./deploy.sh --update --release dist/releases/e-webui-1.0.0-*.tar.gz webui
 
 # حذف سرویس و استقرار (با حفظ داده‌های پایدار به صورت پیش‌فرض):
 ./deploy.sh --uninstall webui

@@ -38,6 +38,37 @@ except Exception:
     run_in_container "${c_name}" python3 -c "${py_cmd}" 2>/dev/null || true
 }
 
+# Reads all major state fields in a single Python invocation to eliminate subshell overhead
+state_read_summary() {
+    local c_name="$1"
+    local app_dir="${2:-/opt/e-webui}"
+    local path
+    path="$(state_file_path "${app_dir}")"
+
+    if ! state_exists "${c_name}" "${app_dir}"; then
+        return 1
+    fi
+
+    local py_cmd="import json, sys
+try:
+    with open('${path}', 'r') as f:
+        d = json.load(f)
+    print(f\"ACTIVE_REL={d.get('active_release', '')}\")
+    print(f\"PREV_REL={d.get('previous_healthy_release', '')}\")
+    print(f\"VENV_HASH={d.get('active_venv_hash', '')}\")
+    print(f\"ACTIVE_VER={d.get('active_version', '')}\")
+    print(f\"GIT_COMMIT={d.get('git_commit', '')}\")
+    print(f\"HOST_PORT={d.get('host_port', 8080)}\")
+    print(f\"CONTAINER_PORT={d.get('container_port', 8080)}\")
+    print(f\"OLLAMA_TARGET={d.get('ollama_target', '127.0.0.1:11434')}\")
+    print(f\"PROFILE={d.get('profile', 'core')}\")
+    print(f\"STATUS={d.get('status', 'HEALTHY')}\")
+except Exception:
+    sys.exit(1)
+"
+    run_in_container "${c_name}" python3 -c "${py_cmd}" 2>/dev/null || true
+}
+
 state_get_active_release() {
     state_read_field "$1" "active_release" "${2:-/opt/e-webui}"
 }
@@ -56,6 +87,12 @@ state_get_active_version() {
 
 state_get_git_commit() {
     state_read_field "$1" "git_commit" "${2:-/opt/e-webui}"
+}
+
+state_get_profile() {
+    local val
+    val=$(state_read_field "$1" "profile" "${2:-/opt/e-webui}")
+    echo "${val:-core}"
 }
 
 state_get_tts_python_version() {
@@ -134,6 +171,7 @@ state_commit_release() {
     local ollama_target="$6"
     local app_version="${7:-}"
     local git_commit="${8:-}"
+    local profile="${9:-core}"
     local path
     path="$(state_file_path "${app_dir}")"
 
@@ -144,6 +182,7 @@ state_commit_release() {
     local safe_release_id="${release_id//\'/}"
     local safe_venv_hash="${venv_hash//\'/}"
     local safe_ollama_target="${ollama_target//\'/}"
+    local safe_profile="${profile//\'/}"
 
     local py_script="import json, os, datetime
 path = '${path}'
@@ -157,7 +196,7 @@ if os.path.exists(path):
 else:
     data = {}
 
-data['schema_version'] = 2
+data['schema_version'] = '1.1.0'
 data['container_name'] = '${safe_c_name}'
 old_active = data.get('active_release')
 if old_active and old_active != '${safe_release_id}':
@@ -170,7 +209,10 @@ if '${safe_app_version}':
 if '${safe_git_commit}':
     data['git_commit'] = '${safe_git_commit}'
 data['host_port'] = int('${host_port}')
+data['container_port'] = 8080
 data['ollama_target'] = '${safe_ollama_target}'
+data['profile'] = '${safe_profile}'
+data['status'] = 'HEALTHY'
 if 'installed_at' not in data:
     data['installed_at'] = now
 data['last_updated_at'] = now

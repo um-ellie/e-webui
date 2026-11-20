@@ -33,6 +33,62 @@ is_git_dirty() {
     return 1
 }
 
+workspace_has_changes() {
+    local src_dir="${1:-${REPO_ROOT}}"
+    local dist_dir="${2:-${src_dir}/dist/releases}"
+
+    if [ ! -d "${dist_dir}" ]; then
+        return 0
+    fi
+
+    local latest_pkg=""
+    if [ "$(type -t find_latest_release_package || true)" = "function" ]; then
+        latest_pkg=$(find_latest_release_package "${dist_dir}" 2>/dev/null || true)
+    fi
+
+    if [ -z "${latest_pkg}" ] || [ ! -e "${latest_pkg}" ]; then
+        return 0
+    fi
+
+    # Check git uncommitted changes in app/ or requirements.txt
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        if [ -n "$(git status --porcelain -- "${src_dir}/app" "${src_dir}/requirements.txt" 2>/dev/null)" ]; then
+            return 0
+        fi
+    fi
+
+    # Check file modification time compared to latest package
+    if [ -e "${latest_pkg}" ]; then
+        local newer_files
+        newer_files=$(find "${src_dir}/app" "${src_dir}/requirements.txt" -newer "${latest_pkg}" 2>/dev/null | head -n 1 || true)
+        if [ -n "${newer_files}" ]; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+auto_package_if_needed() {
+    local src_dir="${1:-${REPO_ROOT}}"
+    local dist_dir="${2:-${src_dir}/dist/releases}"
+    local force_build="${3:-0}"
+
+    mkdir -p "${dist_dir}"
+    local latest_pkg=""
+    if [ "$(type -t find_latest_release_package || true)" = "function" ]; then
+        latest_pkg=$(find_latest_release_package "${dist_dir}" 2>/dev/null || true)
+    fi
+
+    if [ "${force_build}" -eq 1 ] || [ -z "${latest_pkg}" ] || workspace_has_changes "${src_dir}" "${dist_dir}"; then
+        info "Source changes detected in workspace. Auto-packaging fresh release..." >&2
+        build_release_package "${src_dir}" "${dist_dir}" "" 0 1 0 >&2
+        latest_pkg=$(find_latest_release_package "${dist_dir}")
+    fi
+
+    echo "${latest_pkg}"
+}
+
 detect_app_version() {
     local src_dir="$1"
     local main_py="${src_dir}/app/main.py"

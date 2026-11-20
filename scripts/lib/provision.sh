@@ -55,18 +55,26 @@ configure_proxy_devices() {
         fi
         success "'webui-proxy' device configured on port ${host_port}."
     else
-        # Verify existing webui-proxy matches requested host port
+        # Verify existing webui-proxy matches requested host port and container port 8080
+        local has_correct_listen=0
+        local has_correct_connect=0
         if echo "${dev_show}" | grep -A 5 "webui-proxy:" | grep -q "listen:.*:${host_port}"; then
-            success "'webui-proxy' device already configured on port ${host_port}."
-        elif echo "${dev_show}" | grep -q "webui-proxy" && ! echo "${dev_show}" | grep -q "webui-proxy:"; then
-            success "'webui-proxy' device already configured."
+            has_correct_listen=1
+        fi
+        if echo "${dev_show}" | grep -A 5 "webui-proxy:" | grep -q "connect:.*:8080"; then
+            has_correct_connect=1
+        fi
+
+        if [ "${has_correct_listen}" -eq 1 ] && [ "${has_correct_connect}" -eq 1 ]; then
+            success "'webui-proxy' device already configured on port ${host_port} (mapped to container:8080)."
         else
-            info "Updating 'webui-proxy' listen port to ${host_port}..."
-            if ! incus_cmd config device set "${c_name}" webui-proxy listen "tcp:127.0.0.1:${host_port}" 2>/dev/null; then
-                incus_cmd config device remove "${c_name}" webui-proxy 2>/dev/null || true
-                incus_cmd config device add "${c_name}" webui-proxy proxy listen=tcp:127.0.0.1:${host_port} connect=tcp:127.0.0.1:8080
+            info "Harmonizing 'webui-proxy' (Host:${host_port} -> Container:8080)..."
+            incus_cmd config device remove "${c_name}" webui-proxy 2>/dev/null || true
+            if ! incus_cmd config device add "${c_name}" webui-proxy proxy listen=tcp:127.0.0.1:${host_port} connect=tcp:127.0.0.1:8080; then
+                error "Failed to re-configure 'webui-proxy' on port ${host_port}."
+                return 3
             fi
-            success "'webui-proxy' device updated to port ${host_port}."
+            success "'webui-proxy' device updated to port ${host_port} -> 8080."
         fi
     fi
 

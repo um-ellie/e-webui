@@ -139,8 +139,9 @@ run_repair_cli() {
 
     acquire_lock "${c_name}" "${app_dir}" || exit 2
 
-    info "1. Verifying directory structure and system prerequisites..."
+    info "1. Verifying directory structure, proxy devices, and system prerequisites..."
     setup_deployment_directories "${c_name}" "${app_dir}"
+    configure_proxy_devices "${c_name}" "${host_port}" "${ollama_target}"
     if [ "$(type -t install_system_prerequisites || true)" = "function" ]; then
         install_system_prerequisites "${c_name}"
     fi

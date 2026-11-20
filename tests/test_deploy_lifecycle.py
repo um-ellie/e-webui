@@ -440,6 +440,31 @@ class TestDeployLifecycle(unittest.TestCase):
         content = unit_file.read_text()
         self.assertIn("ExecStart=/opt/e-webui/current/venv/bin/uvicorn", content)
 
+    def test_smart_update_auto_packaging(self):
+        """Verify update automatically packages local workspace code when no prior package is specified."""
+        builder_lib = REPO_ROOT / "scripts" / "lib" / "builder.sh"
+        common_lib = REPO_ROOT / "scripts" / "lib" / "common.sh"
+        archive_lib = REPO_ROOT / "scripts" / "lib" / "archive.sh"
+
+        src_dir = self.temp_dir / "smart_src"
+        src_dir.mkdir()
+        (src_dir / "app").mkdir()
+        (src_dir / "app" / "main.py").write_text('app = FastAPI(title="e-webui", version="1.1.0")\n')
+        (src_dir / "requirements.txt").write_text("fastapi>=0.100.0\n")
+        dist_dir = self.temp_dir / "smart_dist"
+
+        script = f"""
+        source "{common_lib}"
+        source "{archive_lib}"
+        source "{builder_lib}"
+        auto_package_if_needed "{src_dir}" "{dist_dir}" 0
+        """
+        res = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+        self.assertTrue((dist_dir).exists())
+        bundles = list(dist_dir.glob("*.tar.gz"))
+        self.assertEqual(len(bundles), 1)
+
     def test_deploy_rejects_missing_release(self):
         """Verify deploy halts with exit code 2 when no release package exists."""
         deploy_sh = REPO_ROOT / "scripts" / "deploy.sh"

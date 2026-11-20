@@ -63,3 +63,40 @@ detect_deployment_state() {
     echo "${DEPLOY_STATE_UNMANAGED}"
     return 0
 }
+
+detect_system_arch() {
+    local raw_arch
+    raw_arch=$(uname -m 2>/dev/null || echo "unknown")
+    case "${raw_arch}" in
+        x86_64|amd64)
+            echo "x86_64"
+            ;;
+        aarch64|arm64|armv8*)
+            echo "aarch64"
+            ;;
+        *)
+            echo "${raw_arch}"
+            ;;
+    esac
+}
+
+detect_container_arch() {
+    local c_name="$1"
+    if ! container_exists "${c_name}"; then
+        detect_system_arch
+        return
+    fi
+    local raw_arch
+    raw_arch=$(run_in_container "${c_name}" uname -m 2>/dev/null || detect_system_arch)
+    case "${raw_arch}" in
+        x86_64|amd64)
+            echo "x86_64"
+            ;;
+        aarch64|arm64|armv8*)
+            echo "aarch64"
+            ;;
+        *)
+            echo "${raw_arch}"
+            ;;
+    esac
+}

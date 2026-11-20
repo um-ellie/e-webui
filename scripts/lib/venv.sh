@@ -9,7 +9,7 @@ is_compatible_python_binary() {
     local py_bin="$2"
     local check_cmd="import sys
 major, minor = sys.version_info[:2]
-if (3, 10) <= (major, minor) <= (3, 12):
+if (3, 10) <= (major, minor) <= (3, 13):
     sys.exit(0)
 sys.exit(1)
 "
@@ -20,16 +20,14 @@ resolve_compatible_python() {
     local c_name="$1"
     local app_dir="${2:-/opt/e-webui}"
 
-    # 1. Check isolated standalone python-3.11 directory
-    local standalone_bin="${app_dir}/interpreters/python-3.11/bin/python3"
-    if container_test_file "${c_name}" "${standalone_bin}" && \
-       is_compatible_python_binary "${c_name}" "${standalone_bin}"; then
-        echo "${standalone_bin}"
+    # 1. Prefer default system python3 if it satisfies 3.10-3.13 (avoids external downloads)
+    if is_compatible_python_binary "${c_name}" "python3"; then
+        echo "python3"
         return 0
     fi
 
-    # 2. Check alternative system binaries (python3.11, python3.12)
-    for alt_bin in "/usr/bin/python3.11" "/usr/local/bin/python3.11" "/usr/bin/python3.12" "/usr/local/bin/python3.12"; do
+    # 2. Check alternative system binaries (python3.11, python3.12, python3.13)
+    for alt_bin in "/usr/bin/python3.11" "/usr/local/bin/python3.11" "/usr/bin/python3.12" "/usr/local/bin/python3.12" "/usr/bin/python3.13" "/usr/local/bin/python3.13"; do
         if container_test_file "${c_name}" "${alt_bin}" && \
            is_compatible_python_binary "${c_name}" "${alt_bin}"; then
             echo "${alt_bin}"
@@ -37,9 +35,11 @@ resolve_compatible_python() {
         fi
     done
 
-    # 3. Check default system python3 (only if 3.10-3.12)
-    if is_compatible_python_binary "${c_name}" "python3"; then
-        echo "python3"
+    # 3. Check isolated standalone python-3.11 directory
+    local standalone_bin="${app_dir}/interpreters/python-3.11/bin/python3"
+    if container_test_file "${c_name}" "${standalone_bin}" && \
+       is_compatible_python_binary "${c_name}" "${standalone_bin}"; then
+        echo "${standalone_bin}"
         return 0
     fi
 
@@ -57,10 +57,23 @@ ensure_compatible_python() {
         return 0
     fi
 
-    info "Compatible Python (3.10-3.12) not found for Kokoro TTS. Provisioning standalone Python 3.11..." >&2
+    info "Compatible Python (3.10-3.13) not found. Provisioning standalone Python..." >&2
     local target_dir="${app_dir}/interpreters/python-3.11"
     local staging_tar="${app_dir}/staging/python-3.11-standalone.tar.gz"
-    local py_url="${PYTHON_STANDALONE_URL:-${STANDALONE_PYTHON_DEFAULT_URL}}"
+
+    # Architecture-aware download resolution
+    local py_url="${PYTHON_STANDALONE_URL:-}"
+    if [ -z "${py_url}" ]; then
+        local c_arch="x86_64"
+        if [ "$(type -t detect_container_arch || true)" = "function" ]; then
+            c_arch=$(detect_container_arch "${c_name}")
+        fi
+        if [ "${c_arch}" = "aarch64" ]; then
+            py_url="https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.11.10+20241016-aarch64-unknown-linux-gnu-install_only.tar.gz"
+        else
+            py_url="${STANDALONE_PYTHON_DEFAULT_URL}"
+        fi
+    fi
 
     run_in_container "${c_name}" mkdir -p "${app_dir}/interpreters" "${app_dir}/staging"
 
@@ -69,7 +82,7 @@ ensure_compatible_python() {
         info "Transferring local cached standalone Python archive to container..." >&2
         container_push "${REPO_ROOT}/dist/python-3.11-standalone.tar.gz" "${c_name}${staging_tar}"
     else
-        info "Downloading standalone Python 3.11 from ${py_url}..." >&2
+        info "Downloading standalone Python from ${py_url}..." >&2
         local proxy_env=""
         if [ -n "${HTTP_PROXY:-}" ]; then proxy_env="http_proxy='${HTTP_PROXY}' HTTP_PROXY='${HTTP_PROXY}' ${proxy_env}"; fi
         if [ -n "${HTTPS_PROXY:-}" ]; then proxy_env="https_proxy='${HTTPS_PROXY}' HTTPS_PROXY='${HTTPS_PROXY}' ${proxy_env}"; fi
@@ -102,7 +115,7 @@ ensure_compatible_python() {
         return 3
     fi
 
-    success "Standalone Python 3.11 provisioned successfully at ${target_bin}." >&2
+    success "Standalone Python provisioned successfully at ${target_bin}." >&2
     echo "${target_bin}"
     return 0
 }
@@ -119,8 +132,7 @@ calculate_requirements_hash() {
 venv_dir_for_hash() {
     local app_dir="${1:-/opt/e-webui}"
     local hash_val="$2"
-    # Tag with py3.11 prefix to ensure isolation from Python 3.13 venvs
-    echo "${app_dir}/venvs/py3.11-${hash_val}"
+    echo "${app_dir}/venvs/env-${hash_val}"
 }
 
 venv_exists_in_container() {
@@ -168,11 +180,16 @@ ensure_venv_in_container() {
     local extra_idx="${PIP_EXTRA_INDEX_URL:-https://download.pytorch.org/whl/cpu}"
     pip_flags="${pip_flags} --extra-index-url '${extra_idx}'"
 
-    info "Installing CPU-only PyTorch and Kokoro TTS dependencies..."
-    local speech_deps_cmd="${venv_dir}/bin/pip install ${pip_flags} 'torch>=2.2.0,<=2.6.0' 'kokoro>=0.8.4' 'soundfile>=0.12.1'"
-    if ! run_in_container "${c_name}" env sh -c "${speech_deps_cmd}"; then
-        warn "Direct installation of speech dependencies returned non-zero status. Falling back to default index..."
-        run_in_container "${c_name}" "${venv_dir}/bin/pip" install 'torch' 'kokoro' 'soundfile' || true
+    local profile="${DEPLOY_PROFILE:-core}"
+    if [ "${profile}" = "tts" ]; then
+        info "Installing optional CPU-only PyTorch and Kokoro TTS dependencies..."
+        local speech_deps_cmd="${venv_dir}/bin/pip install ${pip_flags} 'torch>=2.2.0,<=2.6.0' 'kokoro>=0.8.4' 'soundfile>=0.12.1'"
+        if ! run_in_container "${c_name}" env sh -c "${speech_deps_cmd}"; then
+            warn "Direct installation of speech dependencies returned non-zero status. Falling back to default index..."
+            run_in_container "${c_name}" "${venv_dir}/bin/pip" install 'torch' 'kokoro' 'soundfile' || true
+        fi
+    else
+        info "Core Profile: Skipping heavy PyTorch dependencies (<50MB RAM footprint)."
     fi
 
     if container_test_file "${c_name}" "${req_container_path}"; then

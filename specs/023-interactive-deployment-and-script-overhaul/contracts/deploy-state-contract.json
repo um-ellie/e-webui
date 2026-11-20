@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DeployState",
+  "description": "Schema for /opt/e-webui/.deploy_state conforming to Spec 023",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "container_name",
+    "active_release_id",
+    "active_version",
+    "host_port",
+    "container_port",
+    "profile",
+    "installed_at",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0", "1.1.0"]
+    },
+    "container_name": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+    },
+    "active_release_id": {
+      "type": "string"
+    },
+    "active_version": {
+      "type": "string"
+    },
+    "git_commit": {
+      "type": "string"
+    },
+    "active_venv_hash": {
+      "type": "string"
+    },
+    "host_port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "container_port": {
+      "type": "integer",
+      "default": 8080
+    },
+    "ollama_target": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["core", "tts"]
+    },
+    "installed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["HEALTHY", "DEGRADED", "MIGRATED", "REPAIRING"]
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "release_id": { "type": "string" },
+          "version": { "type": "string" },
+          "installed_at": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      }
+    }
+  }
+}

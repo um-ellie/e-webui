@@ -13,9 +13,10 @@ capture_service_logs() {
 
 verify_http_health() {
     local c_name="$1"
-    local port="${2:-8080}"
+    local host_port="${2:-8080}"
     local max_attempts="${3:-15}"
     local interval="${4:-2}"
+    local container_port=8080
 
     info "Verifying application service and HTTP health (up to $((max_attempts * interval))s)..."
 
@@ -29,15 +30,15 @@ verify_http_health() {
             continue
         fi
 
-        # 2. Query HTTP health endpoint inside container
+        # 2. Query HTTP health endpoint inside container (always port 8080)
         local http_code
-        http_code=$(run_in_container "${c_name}" curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/api/health" 2>/dev/null || echo "000")
+        http_code=$(run_in_container "${c_name}" curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${container_port}/api/health" 2>/dev/null || echo "000")
 
         if [ "${http_code}" = "200" ]; then
-            success "HTTP Health Check: Service is ready (HTTP 200 on /api/health)."
+            success "HTTP Health Check: Service is ready (HTTP 200 on /api/health inside container)."
             # Optional check of Ollama connection status
             local body
-            body=$(run_in_container "${c_name}" curl -s "http://127.0.0.1:${port}/api/health" 2>/dev/null || true)
+            body=$(run_in_container "${c_name}" curl -s "http://127.0.0.1:${container_port}/api/health" 2>/dev/null || true)
             if echo "${body}" | grep -q '"ollama_connected":false'; then
                 warn "Application is healthy, but upstream Ollama backend is reported as disconnected (status: degraded)."
             fi

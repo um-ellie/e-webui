@@ -23,6 +23,7 @@ if [ -f "${LIB_DIR}/provision.sh" ]; then source "${LIB_DIR}/provision.sh"; fi
 if [ -f "${LIB_DIR}/migrate.sh" ]; then source "${LIB_DIR}/migrate.sh"; fi
 if [ -f "${LIB_DIR}/uninstall.sh" ]; then source "${LIB_DIR}/uninstall.sh"; fi
 if [ -f "${LIB_DIR}/tts.sh" ]; then source "${LIB_DIR}/tts.sh"; fi
+if [ -f "${LIB_DIR}/builder.sh" ]; then source "${LIB_DIR}/builder.sh"; fi
 if [ -f "${LIB_DIR}/diagnostics.sh" ]; then source "${LIB_DIR}/diagnostics.sh"; fi
 
 # Defaults
@@ -37,6 +38,7 @@ PURGE_DATA=0
 OPERATION="auto"
 RELEASE_PATH=""
 SKIP_MODEL_DOWNLOAD=0
+DEPLOY_PROFILE="core"
 
 show_help() {
     cat <<EOF
@@ -45,18 +47,22 @@ Usage: $(basename "$0") [OPERATION] [OPTIONS] [CONTAINER_NAME]
 e-webui Deployment Lifecycle Manager for Incus Containers.
 
 Operations:
-  (no operation)       Automatically detect whether to install or update
+  (no operation)       In interactive terminal: launches Control Center TUI; headless: auto install/update
+  --ctl, --interactive Launch interactive Terminal Control Center dashboard
   --install            Perform initial container provisioning and installation
-  --update             Update existing deployment using zero-rebuild release switch
+  --update             Update deployment with smart auto-packaging and atomic hot-switch
+  --dev-sync           Fast code synchronization directly into active container (hot-reload)
   --download-model     Download/verify Kokoro-82M model weights into shared persistent storage
   --rollback           Restore previous healthy release
   --status             Display container, release, service, Python runtime, and TTS health
-  --repair             Audit and repair broken symlinks, venvs, service units, and TTS assets
+  --repair             Audit and repair broken symlinks, venvs, service units, and proxy devices
   --uninstall          Remove services and configuration (preserves shared data by default)
   -v, --version        Show version information and exit
   -h, --help           Show this help message and exit
 
 Options:
+  --profile <core|tts> Deployment profile: 'core' (<50MB RAM, fast) or 'tts' (with Kokoro weights)
+  --with-tts           Shorthand to enable optional Kokoro TTS speech synthesis profile
   --release <PATH>     Path to release package directory or .tar.gz bundle (default: latest in dist/releases)
   --skip-model-download
                        Bypass Kokoro-82M model weights download during install or update
@@ -111,6 +117,22 @@ while [ $# -gt 0 ]; do
             echo "e-webui deployment lifecycle manager v1.0.0"
             exit 0
             ;;
+        --ctl|--interactive)
+            exec "${SCRIPT_DIR}/ctl.sh" "${CONTAINER_NAME}"
+            ;;
+        --profile)
+            if [ -n "${2:-}" ]; then
+                DEPLOY_PROFILE="$2"
+                shift 2
+            else
+                error "Option --profile requires 'core' or 'tts'."
+                exit 2
+            fi
+            ;;
+        --with-tts)
+            DEPLOY_PROFILE="tts"
+            shift
+            ;;
         --release)
             if [ -n "${2:-}" ]; then
                 RELEASE_PATH="$2"
@@ -122,6 +144,10 @@ while [ $# -gt 0 ]; do
             ;;
         --install)
             OPERATION="install"
+            shift
+            ;;
+        --dev-sync)
+            OPERATION="dev-sync"
             shift
             ;;
         --update)
@@ -246,7 +272,12 @@ resolve_and_prepare_release() {
             return 2
         fi
     else
-        release_pkg=$(find_latest_release_package "${dist_dir}") || true
+        # Auto-package workspace if code has changed or if no release exists yet
+        if [ "$(type -t auto_package_if_needed || true)" = "function" ]; then
+            release_pkg=$(auto_package_if_needed "${REPO_ROOT}" "${dist_dir}" 0)
+        else
+            release_pkg=$(find_latest_release_package "${dist_dir}") || true
+        fi
     fi
 
     if [ -z "${release_pkg}" ] || [ ! -e "${release_pkg}" ]; then
@@ -349,11 +380,11 @@ run_update() {
     # Link dependencies and data
     link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}"
 
-    # Ensure Kokoro TTS Model Weights (non-blocking)
-    if [ "${SKIP_MODEL_DOWNLOAD:-0}" -eq 1 ]; then
-        info "Skipping Kokoro model weights download as requested (--skip-model-download)."
-    else
+    # Ensure Kokoro TTS Model Weights (non-blocking if TTS profile)
+    if [ "${DEPLOY_PROFILE:-core}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
         ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+    else
+        info "Core profile active: skipping Kokoro TTS model acquisition."
     fi
 
     # Update systemd unit and environment configuration with offline settings
@@ -368,7 +399,7 @@ run_update() {
 
     # Health check
     if verify_http_health "${CONTAINER_NAME}" "${HOST_PORT}" 15 2; then
-        state_commit_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${HOST_PORT}" "${OLLAMA_TARGET}" "${app_version}" "${git_commit}"
+        state_commit_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${HOST_PORT}" "${OLLAMA_TARGET}" "${app_version}" "${git_commit}" "${DEPLOY_PROFILE:-core}"
         local tts_present=false
         if kokoro_model_is_present "${CONTAINER_NAME}" "${APP_DIR}"; then
             tts_present=true
@@ -456,11 +487,11 @@ run_install() {
     # Step 7: Link Dependencies & Data
     link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}"
 
-    # Step 7b: Ensure Kokoro TTS Model Weights (non-blocking)
-    if [ "${SKIP_MODEL_DOWNLOAD:-0}" -eq 1 ]; then
-        info "Skipping Kokoro model weights download as requested (--skip-model-download)."
-    else
+    # Step 7b: Ensure Kokoro TTS Model Weights (non-blocking if TTS profile)
+    if [ "${DEPLOY_PROFILE:-core}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
         ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+    else
+        info "Core profile active: skipping Kokoro TTS model acquisition."
     fi
 
     # Step 8: Configure and Install Systemd Service
@@ -474,7 +505,7 @@ run_install() {
     restart_service "${CONTAINER_NAME}"
 
     if verify_http_health "${CONTAINER_NAME}" "${HOST_PORT}" 15 2; then
-        state_commit_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${HOST_PORT}" "${OLLAMA_TARGET}" "${app_version}" "${git_commit}"
+        state_commit_release "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${HOST_PORT}" "${OLLAMA_TARGET}" "${app_version}" "${git_commit}" "${DEPLOY_PROFILE:-core}"
         local tts_present=false
         if kokoro_model_is_present "${CONTAINER_NAME}" "${APP_DIR}"; then
             tts_present=true
@@ -586,13 +617,32 @@ run_download_model() {
 main() {
     case "${OPERATION}" in
         auto)
-            run_auto
+            if [ -t 0 ] && [ -t 1 ] && [ "${NON_INTERACTIVE}" -eq 0 ] && [ -f "${SCRIPT_DIR}/ctl.sh" ]; then
+                exec "${SCRIPT_DIR}/ctl.sh" "${CONTAINER_NAME}"
+            else
+                run_auto
+            fi
             ;;
         install)
             run_install
             ;;
         update)
             run_update
+            ;;
+        dev-sync)
+            banner "Executing Fast Dev-Sync for '${CONTAINER_NAME}'"
+            check_incus_installed || exit 2
+            if ! container_is_running "${CONTAINER_NAME}"; then
+                error "Container '${CONTAINER_NAME}' is not running."
+                exit 2
+            fi
+            info "Syncing 'app/' directly into container..."
+            container_push_dir_contents "${REPO_ROOT}/app" "${CONTAINER_NAME}${APP_DIR}/current/app/"
+            info "Restarting service 'e-webui'..."
+            restart_service "${CONTAINER_NAME}"
+            verify_http_health "${CONTAINER_NAME}" 8080 5 1
+            success "Fast Dev-Sync completed successfully!"
+            exit 0
             ;;
         download-model)
             run_download_model
