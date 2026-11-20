@@ -92,7 +92,7 @@ state_get_git_commit() {
 state_get_profile() {
     local val
     val=$(state_read_field "$1" "profile" "${2:-/opt/e-webui}")
-    echo "${val:-core}"
+    echo "${val}"
 }
 
 state_get_tts_python_version() {
@@ -171,7 +171,7 @@ state_commit_release() {
     local ollama_target="$6"
     local app_version="${7:-}"
     local git_commit="${8:-}"
-    local profile="${9:-core}"
+    local profile="${9:-tts}"
     local path
     path="$(state_file_path "${app_dir}")"
 

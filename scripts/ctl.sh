@@ -168,6 +168,7 @@ action_manage_profiles() {
         tui_header "Modular Deployment Profiles"
         local cur_prof
         cur_prof=$(state_get_profile "${CONTAINER_NAME}" "${APP_DIR}")
+        cur_prof="${cur_prof:-tts}"
         printf " Active Profile: %b%s%b\n\n" "${C_BOLD}${C_CYAN}" "${cur_prof}" "${C_RESET}"
         printf "  [1] Core Profile (<50MB RAM, zero PyTorch, ultra-fast chat)\n"
         printf "  [2] TTS Profile (Speech synthesis & Kokoro-82M model)\n"
@@ -229,7 +230,7 @@ main_interactive_loop() {
     dep_state=$(detect_deployment_state "${CONTAINER_NAME}" "${APP_DIR}")
     if [ "${dep_state}" = "${DEPLOY_STATE_NOT_FOUND}" ]; then
         warn "Container '${CONTAINER_NAME}' does not exist."
-        printf "%bWould you like to perform initial installation? [y/N]: %b" "${C_BOLD}" "${C_RESET}"
+        printf "%bWould you like to perform initial installation (TTS Profile by default)? [y/N]: %b" "${C_BOLD}" "${C_RESET}"
         read -r init_resp || true
         case "${init_resp}" in
             [yY]|[yY][eE][sS])
@@ -258,12 +259,13 @@ main_interactive_loop() {
         local active_rel="none"
         local active_ver="1.0.0"
         local host_port=8080
-        local profile="core"
+        local profile="tts"
 
         if [ "${c_status}" = "RUNNING" ] && state_exists "${CONTAINER_NAME}" "${APP_DIR}"; then
             active_rel=$(state_get_active_release "${CONTAINER_NAME}" "${APP_DIR}")
             active_ver=$(state_get_active_version "${CONTAINER_NAME}" "${APP_DIR}")
             profile=$(state_get_profile "${CONTAINER_NAME}" "${APP_DIR}")
+            profile="${profile:-tts}"
             host_port=$(state_read_field "${CONTAINER_NAME}" "host_port" "${APP_DIR}")
             host_port="${host_port:-8080}"
         fi

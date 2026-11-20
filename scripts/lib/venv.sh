@@ -39,6 +39,9 @@ resolve_compatible_python() {
                 return 0
             fi
         done
+
+        # Under TTS profile, do not fall through to unvalidated/3.13 system python3; force standalone provision
+        return 1
     fi
 
     # 1. Prefer default system python3 if it satisfies 3.10-3.13 (avoids external downloads)

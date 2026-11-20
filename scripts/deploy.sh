@@ -50,22 +50,22 @@ resolve_deployment_profile() {
         return 0
     fi
 
+    if [ "$(type -t state_get_profile || true)" = "function" ]; then
+        local prev_prof
+        prev_prof=$(state_get_profile "${c_name}" "${app_dir}")
+        if [ -n "${prev_prof}" ]; then
+            echo "${prev_prof}"
+            return 0
+        fi
+    fi
+
     if [ "$(type -t kokoro_model_is_present || true)" = "function" ] && \
        kokoro_model_is_present "${c_name}" "${app_dir}"; then
         echo "tts"
         return 0
     fi
 
-    if [ "$(type -t state_get_profile || true)" = "function" ]; then
-        local prev_prof
-        prev_prof=$(state_get_profile "${c_name}" "${app_dir}")
-        if [ -n "${prev_prof}" ] && [ "${prev_prof}" != "core" ]; then
-            echo "${prev_prof}"
-            return 0
-        fi
-    fi
-
-    echo "core"
+    echo "tts"
 }
 
 show_help() {
@@ -415,8 +415,12 @@ run_update() {
     link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${DEPLOY_PROFILE}"
 
     # Ensure Kokoro TTS Model Weights (non-blocking if TTS profile)
-    if [ "${DEPLOY_PROFILE}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
-        ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+    if [ "${DEPLOY_PROFILE}" = "tts" ]; then
+        if [ "${SKIP_MODEL_DOWNLOAD:-0}" -eq 1 ]; then
+            info "Skipping Kokoro model weights download (--skip-model-download passed)."
+        else
+            ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+        fi
     else
         info "Core profile active: skipping Kokoro TTS model acquisition."
     fi
@@ -526,8 +530,12 @@ run_install() {
     link_release_environment "${CONTAINER_NAME}" "${APP_DIR}" "${release_id}" "${req_hash}" "${DEPLOY_PROFILE}"
 
     # Step 7b: Ensure Kokoro TTS Model Weights (non-blocking if TTS profile)
-    if [ "${DEPLOY_PROFILE}" = "tts" ] && [ "${SKIP_MODEL_DOWNLOAD:-0}" -ne 1 ]; then
-        ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+    if [ "${DEPLOY_PROFILE}" = "tts" ]; then
+        if [ "${SKIP_MODEL_DOWNLOAD:-0}" -eq 1 ]; then
+            info "Skipping Kokoro model weights download (--skip-model-download passed)."
+        else
+            ensure_kokoro_model "${CONTAINER_NAME}" "${APP_DIR}" 1
+        fi
     else
         info "Core profile active: skipping Kokoro TTS model acquisition."
     fi
